@@ -1,11 +1,12 @@
-﻿using Framework.Interfaces;
+﻿using System;
+using Framework.Interfaces;
 
 namespace Framework.Common.Services
 {
     /// <summary>
     /// Contracts that all key stores must satisfy
     /// </summary>
-    public interface IKeyStoreService : IService
+    public interface IKeyStoreService : IService, IDisposable
     {
         /// <summary>
         /// Adds or replaces symmetric key to the store

@@ -8,7 +8,7 @@ namespace Framework.Interfaces
     /// <summary>
     /// An interface specifying the requirements for a data provider instance
     /// </summary>
-    public interface IDataContext
+    public interface IDataContext : IDisposable
     {
 
         /// <summary>
