@@ -10,7 +10,7 @@ namespace Framework.Interfaces
     public interface IPublisher
     {
         /// <summary>
-        /// A reference to a configuration component used to access config settings required by the data provider
+        /// A reference to a configuration component used to access config settings required by the publisher
         /// </summary>
         IConfiguration Config { get; set; }
 

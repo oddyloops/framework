@@ -11,6 +11,11 @@ namespace Framework.Common.Services
     {
 
         /// <summary>
+        /// A reference to a configuration component used to access config settings required by the security service
+        /// </summary>
+        IConfiguration Config { get; set; }
+
+        /// <summary>
         /// Compute Message Hash
         /// </summary>
         /// <param name="message">Message byte buffer</param>

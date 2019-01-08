@@ -10,6 +10,12 @@ namespace Framework.Common.Services
     /// </summary>
     public interface ICommunicationService : IService
     {
+
+        /// <summary>
+        /// A reference to a configuration component used to access config settings required by the communication service
+        /// </summary>
+        IConfiguration Config { get; set; }
+
         /// <summary>
         /// Sends out an email to a single recipient within a non-blocking context
         /// </summary>

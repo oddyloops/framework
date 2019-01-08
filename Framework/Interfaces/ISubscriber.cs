@@ -10,7 +10,7 @@ namespace Framework.Interfaces
     public interface ISubscriber
     {
         /// <summary>
-        /// A reference to a configuration component used to access config settings required by the data provider
+        /// A reference to a configuration component used to access config settings required by the subscriber
         /// </summary>
         IConfiguration Config { get; set; }
 

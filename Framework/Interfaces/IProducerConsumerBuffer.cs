@@ -31,7 +31,7 @@ namespace Framework.Interfaces
 
 
         /// <summary>
-        /// A reference to a configuration component used to access config settings required by the data provider
+        /// A reference to a configuration component used to access config settings required by the shared buffer
         /// </summary>
         IConfiguration Config { get; set; }
     }

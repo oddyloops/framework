@@ -9,6 +9,11 @@ namespace Framework.Common.Services
     public interface IKeyStoreService : IService, IDisposable
     {
         /// <summary>
+        /// A reference to a configuration component used to access config settings required by the key store service
+        /// </summary>
+        IConfiguration Config { get; set; }
+
+        /// <summary>
         /// Adds or replaces symmetric key to the store
         /// </summary>
         /// <param name="index">Index for identifying the key</param>

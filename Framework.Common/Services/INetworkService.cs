@@ -13,7 +13,7 @@ namespace Framework.Common.Services
     public interface INetworkService : IService, IDisposable
     {
         /// <summary>
-        /// A reference to a configuration component used to access config settings required by the data provider
+        /// A reference to a configuration component used to access config settings required by the network service
         /// </summary>
         IConfiguration Config { get; set; }
 

@@ -11,7 +11,7 @@ namespace Framework.Interfaces
     public interface IConsumer
     {
         /// <summary>
-        /// A reference to a configuration component used to access config settings required by the data provider
+        /// A reference to a configuration component used to access config settings required by the consumer
         /// </summary>
         IConfiguration Config { get; set; }
 
