@@ -23,7 +23,7 @@ namespace Framework.Interfaces
         /// </summary>
         /// <param name="key">Key</param>
         /// <param name="value">Value corresponding to key</param>
-        void SetValue(string key, object value);
+        void SetValue<T>(string key, T value);
 
 
         /// <summary>
@@ -39,6 +39,6 @@ namespace Framework.Interfaces
         /// </summary>
         /// <param name="key">Key</param>
         /// <returns>Corresponding object value</returns>
-        object GetValueObject(string key);
+        T GetValue<T>(string key);
     }
 }

@@ -222,7 +222,7 @@ namespace Framework.Interfaces
         /// <typeparam name="T"></typeparam>
         /// <param name="matcher">Match predicate encoded in an expression</param>
         /// <returns>A completion token encapsulating the matching instances of T</returns>
-        Task<IEnumerable<T>> SelectMatchingAsync<T>(Expression<T> matcher);
+        Task<IEnumerable<T>> SelectMatchingAsync<T>(Expression<Func<T,bool>> matcher);
 
         /// <summary>
         /// Retrieves a single instance of T based on the specified key

@@ -3,7 +3,7 @@ using Framework.Common.Data;
 using System.Threading.Tasks;
 
 
-namespace RTMeld.Services
+namespace Framework.Common.Services
 {
     /// <summary>
     /// Contracts that all account management services must satisfy
@@ -18,7 +18,7 @@ namespace RTMeld.Services
         /// </summary>
         /// <param name="user">User account details</param>
         /// <returns>A callback handle providing access to the status code indicating the result of the operation</returns>
-        Task<IStatus> CreateUserAccountAsync(IUser user);
+        Task<IStatus<int>> CreateUserAccountAsync(IUser user);
 
 
         /// <summary>
@@ -34,14 +34,14 @@ namespace RTMeld.Services
         /// </summary>
         /// <param name="user">User account details</param>
         /// <returns>A callback handle providing access to the status code indicating the result of the operation</returns>
-        Task<IStatus> SuspendUserAccountAsync(IUser user);
+        Task<IStatus<int>> SuspendUserAccountAsync(IUser user);
 
         /// <summary>
         /// Reopens a previously suspended user account within a non-blocking context
         /// </summary>
         /// <param name="user">User account details</param>
         /// <returns>A callback handle providing access to the status code indicating the result of the operation</returns>
-        Task<IStatus> ReopenUserAccountAsync(IUser user);
+        Task<IStatus<int>> ReopenUserAccountAsync(IUser user);
 
         /// <summary>
         /// Initiates password recovery by username within a non-blocking context
@@ -62,7 +62,7 @@ namespace RTMeld.Services
         /// </summary>
         /// <param name="user">User account containing new password</param>
         /// <returns>A callback handle providing access to the status code indicating the result of the operation</returns>
-        Task<IStatus> ResetPasswordAsync(IUser user);
+        Task<IStatus<int>> ResetPasswordAsync(IUser user);
 
     }
 }
