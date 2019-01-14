@@ -1,7 +1,7 @@
 ﻿using Framework.Interfaces;
 using System.Collections.Generic;
 
-namespace Framework.Common.Impl
+namespace Framework.Utils
 {
     /// <summary>
     /// Utility class

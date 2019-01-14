@@ -23,7 +23,8 @@ namespace Framework.Interfaces
         IConfiguration Config { get; set; }
 
         /// <summary>
-        /// A flag to indicate if changes made should be automatically committed to data source or not (if applicable)
+        /// A flag to indicate if changes made should be automatically committed to data source or not (if applicable).
+        /// This should be set in a config file if using dependency injection
         /// </summary>
         bool AutoCommit { get; set; }
 

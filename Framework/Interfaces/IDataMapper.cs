@@ -47,5 +47,12 @@ namespace Framework.Interfaces
         /// <param name="fields">Key-pairs of each field</param>
         /// <returns>An instance of type T</returns>
         T CreateInstanceFromFields<T>(IDictionary<string, object> fields);
+
+        /// <summary>
+        /// Gets the map name of an object class
+        /// </summary>
+        /// <param name="objType">Object metadata</param>
+        /// <returns>Map name</returns>
+        string GetObjectName(System.Type objType);
     }
 }

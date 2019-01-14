@@ -229,6 +229,17 @@ namespace DataMapperImpl
             return obj;
 
         }
+
+        /// <summary>
+        /// Gets the map name of an object class
+        /// </summary>
+        /// <param name="objType">Object metadata</param>
+        /// <returns>Map name</returns>
+        public string GetObjectName(System.Type objType)
+        {
+            var mapAttribute = GetAttribute(objType, typeof(MapAttribute), true);
+            return (mapAttribute as MapAttribute).MapName;
+        }
     }
 
 }

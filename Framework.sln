@@ -9,7 +9,9 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Framework.Common", "Framewo
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DataMapperImpl", "DataMapperImpl\DataMapperImpl.csproj", "{C80C142A-522E-4B2B-AC44-654603640325}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Framework.Common.Impl", "Framework.Common.Impl\Framework.Common.Impl.csproj", "{169B3E47-331D-4A11-9D3B-F5C988CF93BE}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Framework.Common.Impl", "Framework.Common.Impl\Framework.Common.Impl.csproj", "{169B3E47-331D-4A11-9D3B-F5C988CF93BE}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DataContext.Relational", "DataContext.Relational\DataContext.Relational.csproj", "{44B9456F-EF01-42EF-A9B8-4BB4E89E768B}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -33,6 +35,10 @@ Global
 		{169B3E47-331D-4A11-9D3B-F5C988CF93BE}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{169B3E47-331D-4A11-9D3B-F5C988CF93BE}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{169B3E47-331D-4A11-9D3B-F5C988CF93BE}.Release|Any CPU.Build.0 = Release|Any CPU
+		{44B9456F-EF01-42EF-A9B8-4BB4E89E768B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{44B9456F-EF01-42EF-A9B8-4BB4E89E768B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{44B9456F-EF01-42EF-A9B8-4BB4E89E768B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{44B9456F-EF01-42EF-A9B8-4BB4E89E768B}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
