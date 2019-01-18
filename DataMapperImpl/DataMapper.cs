@@ -104,13 +104,58 @@ namespace DataMapperImpl
             return null;
         }
 
+
         /// <summary>
-        /// A helper method for retrieving a field metadata based on its name, or map name
+        /// A helper method for getting an attribute reference for a field
+        /// </summary>
+        /// <param name="objType">Containing object metadata</param>
+        /// <param name="property">Field metadata</param>
+        /// <param name="attrType">Attribute type</param>
+        /// <returns>A reference to the attribute instance</returns>
+        private Attribute GetPropertyAttribute(Type objType,PropertyInfo property,Type attrType)
+        {
+            foreach (var prop in objType.GetProperties())
+            {
+                if(prop.Equals(property))
+                {
+                    var attrs = prop.GetCustomAttributes(attrType, true);
+                    if(attrs != null && attrs.Count() > 0)
+                    {
+                        return attrs.First() as Attribute;
+                    }
+                    else
+                    {
+                        //recursively search its implemented interfaces (.net bug not performing this ancestral search)
+                        foreach(var _interface in objType.GetInterfaces())
+                        {
+                            var result = GetPropertyAttribute(_interface, property, attrType);
+                            if(result != null)
+                            {
+                                return result;
+                            }
+                        }
+                    }
+                    break;
+                }
+
+
+            }
+
+            return null;
+           
+        }
+
+        #endregion
+
+
+
+        /// <summary>
+        /// A method for retrieving a field metadata based on its name, or map name
         /// </summary>
         /// <param name="fieldName">Field name or map name</param>
         /// <param name="objType">Object metadata</param>
         /// <returns>Metadata for field with specified name or map name</returns>
-        private PropertyInfo GetFieldByName(string fieldName, Type objType)
+        public PropertyInfo GetFieldByName(string fieldName, Type objType)
         {
             foreach (var field in objType.GetProperties())
             {
@@ -134,7 +179,6 @@ namespace DataMapperImpl
             }
             return null;
         }
-        #endregion
 
         /// <summary>
         /// Returns value of field mapped to specified name
@@ -239,6 +283,27 @@ namespace DataMapperImpl
         {
             var mapAttribute = GetAttribute(objType, typeof(MapAttribute), true);
             return (mapAttribute as MapAttribute).MapName;
+        }
+
+
+
+        /// <summary>
+        /// Returns a collection of all the field map names in object metadata. 
+        /// Uses actual property names if map attribute is missing
+        /// </summary>
+        /// <param name="objType">Object metadata</param>
+        /// <returns>Collection of field map names</returns>
+        public IList<string> GetFieldNames(System.Type objType)
+        {
+            IList<string> mapNames = new List<string>();
+            foreach(var field in objType.GetProperties())
+            {
+                var mapAttr = GetPropertyAttribute(objType, field, typeof(MapAttribute)) as MapAttribute;
+                string mapName = mapAttr != null ? mapAttr.MapName : field.Name;
+                mapNames.Add(mapName);
+            }
+
+            return mapNames;
         }
     }
 

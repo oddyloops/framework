@@ -10,6 +10,7 @@ using MySql.Data.MySqlClient;
 using Oracle.ManagedDataAccess.Client;
 using Framework.Utils;
 using System.Data;
+using System.Text;
 
 namespace DataContext.Relational
 {
@@ -93,6 +94,60 @@ namespace DataContext.Relational
             }
             return cmd;
         }
+
+        private IDictionary<string,object> TransformObjectToParams(object record)
+        {
+         
+            IDictionary<string, object> paramRec = new SortedDictionary<string, object>(); //need to maintain order for traversals
+            IList<string> fieldNames = Mapper.GetFieldNames(record.GetType());
+            foreach(var field in fieldNames)
+            {
+                paramRec.Add(field, Mapper.GetField(field, record));
+            }
+            return paramRec;
+        }
+
+        private IDictionary<string,object> TransformToSqlParam(IDictionary<string,object> parameters)
+        {
+            IDictionary<string, object> sqlParameters = new SortedDictionary<string, object>(); //need to maintain order for traversals
+            int paramCount = 0;
+            foreach(var param in parameters)
+            {
+                sqlParameters.Add("@P" + paramCount, param.Value);
+                paramCount++;
+            }
+
+            return sqlParameters;
+        }
+
+        private string BuildCommandForInsert(IDictionary<string,object> parameters,string tableName)
+        {
+            StringBuilder command = new StringBuilder($"INSERT INTO {_tablePrefix}{tableName}(");
+            bool isFirst = true;
+            foreach(var param in parameters)
+            {
+                if(!isFirst)
+                {
+                    command.Append(",");
+                    isFirst = false;
+                }
+                command.Append(param.Key);
+            }
+            command.Append(") VALUES (");
+
+            for(int i =0; i < parameters.Count; i++)
+            {
+                if (!isFirst)
+                {
+                    command.Append(",");
+                    isFirst = false;
+                }
+                command.Append("@P" + i);
+            }
+            return command.ToString();
+
+        }
+
         #endregion
 
 
@@ -209,18 +264,25 @@ namespace DataContext.Relational
 
             try
             {
+
                 connection.Open();
                 string tableName = Mapper.GetObjectName(typeof(T));
                 string keyName = Mapper.GetKeyName(typeof(T));
+                
 
                 //create data table
 
                 DataTable keyTable = new DataTable("KeyTable");
-                key
+                keyTable.Columns.Add("ID", Mapper.GetFieldByName(keyName, typeof(T)).PropertyType);
+                foreach(var obj  in objList)
+                {
+                    keyTable.Rows.Add(Mapper.GetKeyValue(obj));
+                }
+
 
                 string cmdStr = $"DELETE FROM {_tablePrefix}{tableName} WHERE {keyName} IN  = @P0";
                 IDictionary<string, object> parameters = new Dictionary<string, object> {
-                    { "@P0", Mapper.GetKeyValue(obj) }
+                    { "@P0", keyTable }
                 };
                 var cmd = CreateCommand(cmdStr, parameters, connection);
                 int result = cmd.ExecuteNonQuery();
@@ -240,32 +302,224 @@ namespace DataContext.Relational
 
         public IStatus<int> DeleteAll<T, K>(IList<K> keyList)
         {
-            throw new NotImplementedException();
+            DbConnection connection = null;
+            connection = CreateConnection();
+
+            try
+            {
+
+                connection.Open();
+                string tableName = Mapper.GetObjectName(typeof(T));
+                string keyName = Mapper.GetKeyName(typeof(T));
+
+
+                //create data table
+
+                DataTable keyTable = new DataTable("KeyTable");
+                keyTable.Columns.Add("ID", typeof(K));
+                foreach (var key in keyList)
+                {
+                    keyTable.Rows.Add(key);
+                }
+
+
+                string cmdStr = $"DELETE FROM {_tablePrefix}{tableName} WHERE {keyName} IN  = @P0";
+                IDictionary<string, object> parameters = new Dictionary<string, object> {
+                    { "@P0", keyTable }
+                };
+                var cmd = CreateCommand(cmdStr, parameters, connection);
+                int result = cmd.ExecuteNonQuery();
+                IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
+                status.IsSuccess = result > 0;
+                status.StatusInfo = result;
+                return status;
+            }
+            finally
+            {
+                if (AutoCommit)
+                {
+                    connection.Close();
+                }
+            }
+
         }
 
-        public Task<IStatus<int>> DeleteAllAsync<T>(IList<T> obj)
+        public async Task<IStatus<int>> DeleteAllAsync<T>(IList<T> objList)
         {
-            throw new NotImplementedException();
+            DbConnection connection = null;
+            connection = CreateConnection();
+
+            try
+            {
+
+                await connection.OpenAsync();
+                string tableName = Mapper.GetObjectName(typeof(T));
+                string keyName = Mapper.GetKeyName(typeof(T));
+
+
+                //create data table
+
+                DataTable keyTable = new DataTable("KeyTable");
+                keyTable.Columns.Add("ID", Mapper.GetFieldByName(keyName, typeof(T)).PropertyType);
+                foreach (var obj in objList)
+                {
+                    keyTable.Rows.Add(Mapper.GetKeyValue(obj));
+                }
+
+
+                string cmdStr = $"DELETE FROM {_tablePrefix}{tableName} WHERE {keyName} IN  = @P0";
+                IDictionary<string, object> parameters = new Dictionary<string, object> {
+                    { "@P0", keyTable }
+                };
+                var cmd = CreateCommand(cmdStr, parameters, connection);
+                int result = await cmd.ExecuteNonQueryAsync();
+                IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
+                status.IsSuccess = result > 0;
+                status.StatusInfo = result;
+                return status;
+            }
+            finally
+            {
+                if (AutoCommit)
+                {
+                    connection.Close();
+                }
+            }
         }
 
-        public Task<IStatus<int>> DeleteAllAsync<T, K>(IList<K> key)
+        public async Task<IStatus<int>> DeleteAllAsync<T, K>(IList<K> keyList)
         {
-            throw new NotImplementedException();
+            DbConnection connection = null;
+            connection = CreateConnection();
+
+            try
+            {
+
+                await connection.OpenAsync();
+                string tableName = Mapper.GetObjectName(typeof(T));
+                string keyName = Mapper.GetKeyName(typeof(T));
+
+
+                //create data table
+
+                DataTable keyTable = new DataTable("KeyTable");
+                keyTable.Columns.Add("ID", typeof(K));
+                foreach (var key in keyList)
+                {
+                    keyTable.Rows.Add(key);
+                }
+
+
+                string cmdStr = $"DELETE FROM {_tablePrefix}{tableName} WHERE {keyName} IN  = @P0";
+                IDictionary<string, object> parameters = new Dictionary<string, object> {
+                    { "@P0", keyTable }
+                };
+                var cmd = CreateCommand(cmdStr, parameters, connection);
+                int result = await cmd.ExecuteNonQueryAsync();
+                IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
+                status.IsSuccess = result > 0;
+                status.StatusInfo = result;
+                return status;
+            }
+            finally
+            {
+                if (AutoCommit)
+                {
+                    connection.Close();
+                }
+            }
+
         }
 
-        public Task<IStatus<int>> DeleteAsync<T>(T obj)
+        public async Task<IStatus<int>> DeleteAsync<T>(T obj)
         {
-            throw new NotImplementedException();
+            DbConnection connection = null;
+            connection = CreateConnection();
+
+            try
+            {
+                await connection.OpenAsync();
+                string tableName = Mapper.GetObjectName(obj.GetType());
+                string keyName = Mapper.GetKeyName(obj.GetType());
+
+                string cmdStr = $"DELETE FROM {_tablePrefix}{tableName} WHERE {keyName} = @P0";
+                IDictionary<string, object> parameters = new Dictionary<string, object> {
+                    { "@P0", Mapper.GetKeyValue(obj) }
+                };
+                var cmd = CreateCommand(cmdStr, parameters, connection);
+                int result = await cmd.ExecuteNonQueryAsync();
+                IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
+                status.IsSuccess = result > 0;
+                status.StatusInfo = result;
+                return status;
+            }
+            finally
+            {
+                if (AutoCommit)
+                {
+                    connection.Close();
+                }
+            }
         }
 
-        public Task<IStatus<int>> DeleteAsync<T, K>(K key)
+        public async Task<IStatus<int>> DeleteAsync<T, K>(K key)
         {
-            throw new NotImplementedException();
+            DbConnection connection = null;
+            connection = CreateConnection();
+
+            try
+            {
+                await connection.OpenAsync();
+                string tableName = Mapper.GetObjectName(typeof(T));
+                string keyName = Mapper.GetKeyName(typeof(T));
+
+                string cmdStr = $"DELETE FROM {_tablePrefix}{tableName} WHERE {keyName} = @P0";
+                IDictionary<string, object> parameters = new Dictionary<string, object> {
+                    { "@P0", key }
+                };
+                var cmd = CreateCommand(cmdStr, parameters, connection);
+                int result = await cmd.ExecuteNonQueryAsync();
+                IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
+                status.IsSuccess = result > 0;
+                status.StatusInfo = result;
+                return status;
+            }
+            finally
+            {
+                if (AutoCommit)
+                {
+                    connection.Close();
+                }
+            }
         }
 
         public IStatus<int> Insert<T>(T obj)
         {
-            throw new NotImplementedException();
+            DbConnection connection = null;
+            connection = CreateConnection();
+
+            try
+            {
+                connection.Open();
+                string tableName = Mapper.GetObjectName(typeof(T));
+                
+                IDictionary<string, object> parameters = TransformObjectToParams(obj);
+                string cmdStr = BuildCommandForInsert(parameters, tableName);
+                IDictionary<string, object> sqlParams = TransformToSqlParam(parameters);
+                var cmd = CreateCommand(cmdStr, sqlParams, connection);
+                int result = cmd.ExecuteNonQuery();
+                IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
+                status.IsSuccess = result > 0;
+                status.StatusInfo = result;
+                return status;
+            }
+            finally
+            {
+                if (AutoCommit)
+                {
+                    connection.Close();
+                }
+            }
         }
 
         public IStatus<int> InsertAll<T>(IList<T> objList)

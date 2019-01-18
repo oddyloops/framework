@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Reflection;
 using System.Text;
 
 namespace Framework.Interfaces
@@ -18,6 +19,14 @@ namespace Framework.Interfaces
         /// <param name="obj">Object to be mapped</param>
         /// <returns>Field reference</returns>
         object GetField(string fieldName, object obj);
+
+        /// <summary>
+        /// A method for retrieving a field metadata based on its name, or map name
+        /// </summary>
+        /// <param name="fieldName">Field name or map name</param>
+        /// <param name="objType">Object metadata</param>
+        /// <returns>Metadata for field with specified name or map name</returns>
+        PropertyInfo GetFieldByName(string fieldName, Type objType);
 
         /// <summary>
         /// Gets name of object's key field
@@ -54,5 +63,13 @@ namespace Framework.Interfaces
         /// <param name="objType">Object metadata</param>
         /// <returns>Map name</returns>
         string GetObjectName(System.Type objType);
+
+        /// <summary>
+        /// Returns a collection of all the field map names in object metadata. 
+        /// </summary>
+        /// <param name="objType">Object metadata</param>
+        /// <returns>Collection of field map names</returns>
+        IList<string> GetFieldNames(System.Type objType);
+
     }
 }
