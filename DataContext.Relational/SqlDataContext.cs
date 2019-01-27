@@ -109,7 +109,7 @@ namespace DataContext.Relational
 
         private IDictionary<string,object> TransformToSqlParam(IDictionary<string,object> parameters)
         {
-            IDictionary<string, object> sqlParameters = new SortedDictionary<string, object>(); //need to maintain order for traversals
+            IDictionary<string, object> sqlParameters = new Dictionary<string, object>();
             int paramCount = 0;
             foreach(var param in parameters)
             {
@@ -120,7 +120,7 @@ namespace DataContext.Relational
             return sqlParameters;
         }
 
-        private string BuildCommandForInsert(IDictionary<string,object> parameters,string tableName)
+        private string BuildCommandForInsert(IDictionary<string,object> parameters,string tableName, int paramOffset)
         {
             StringBuilder command = new StringBuilder($"INSERT INTO {_tablePrefix}{tableName}(");
             bool isFirst = true;
@@ -142,7 +142,7 @@ namespace DataContext.Relational
                     command.Append(",");
                     isFirst = false;
                 }
-                command.Append("@P" + i);
+                command.Append("@P" + (paramOffset + i));
             }
             return command.ToString();
 
@@ -504,7 +504,7 @@ namespace DataContext.Relational
                 string tableName = Mapper.GetObjectName(typeof(T));
                 
                 IDictionary<string, object> parameters = TransformObjectToParams(obj);
-                string cmdStr = BuildCommandForInsert(parameters, tableName);
+                string cmdStr = BuildCommandForInsert(parameters, tableName,0);
                 IDictionary<string, object> sqlParams = TransformToSqlParam(parameters);
                 var cmd = CreateCommand(cmdStr, sqlParams, connection);
                 int result = cmd.ExecuteNonQuery();
@@ -524,22 +524,139 @@ namespace DataContext.Relational
 
         public IStatus<int> InsertAll<T>(IList<T> objList)
         {
-            throw new NotImplementedException();
+            DbConnection connection = null;
+            connection = CreateConnection();
+
+            try
+            {
+                connection.Open();
+                string tableName = Mapper.GetObjectName(typeof(T));
+                StringBuilder cmdStr = new StringBuilder();
+                int totalParams = 0;
+                IDictionary<string, object> combinedSqlParam = new Dictionary<string, object>();
+                foreach(var obj in objList)
+                {
+                    IDictionary<string, object> parameters = TransformObjectToParams(obj);
+                    cmdStr.Append(BuildCommandForInsert(parameters, tableName, totalParams) + ";\n");
+                    IDictionary<string, object> sqlParams = TransformToSqlParam(parameters);
+                    foreach(var param in sqlParams)
+                    {
+                        combinedSqlParam.Add(param);
+                    }
+
+                }
+                var cmd = CreateCommand(cmdStr.ToString(), combinedSqlParam, connection);
+                int result = cmd.ExecuteNonQuery();
+                IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
+                status.IsSuccess = result > 0;
+                status.StatusInfo = result;
+                return status;
+            }
+            finally
+            {
+                if (AutoCommit)
+                {
+                    connection.Close();
+                }
+            }
         }
 
-        public Task<IStatus<int>> InsertAllAsync<T>(IList<T> objList)
+        public async Task<IStatus<int>> InsertAllAsync<T>(IList<T> objList)
         {
-            throw new NotImplementedException();
+            DbConnection connection = null;
+            connection = CreateConnection();
+
+            try
+            {
+                await connection.OpenAsync();
+                string tableName = Mapper.GetObjectName(typeof(T));
+                StringBuilder cmdStr = new StringBuilder();
+                int totalParams = 0;
+                IDictionary<string, object> combinedSqlParam = new Dictionary<string, object>();
+                foreach (var obj in objList)
+                {
+                    IDictionary<string, object> parameters = TransformObjectToParams(obj);
+                    cmdStr.Append(BuildCommandForInsert(parameters, tableName, totalParams) + ";\n");
+                    IDictionary<string, object> sqlParams = TransformToSqlParam(parameters);
+                    foreach (var param in sqlParams)
+                    {
+                        combinedSqlParam.Add(param);
+                    }
+                    totalParams += sqlParams.Count;
+
+                }
+                var cmd = CreateCommand(cmdStr.ToString(), combinedSqlParam, connection);
+                int result = await cmd.ExecuteNonQueryAsync();
+                IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
+                status.IsSuccess = result > 0;
+                status.StatusInfo = result;
+                return status;
+            }
+            finally
+            {
+                if (AutoCommit)
+                {
+                    connection.Close();
+                }
+            }
         }
 
-        public Task<IStatus<int>> InsertAsync<T>(T obj)
+        public async Task<IStatus<int>> InsertAsync<T>(T obj)
         {
-            throw new NotImplementedException();
+            DbConnection connection = null;
+            connection = CreateConnection();
+
+            try
+            {
+                await connection.OpenAsync();
+                string tableName = Mapper.GetObjectName(typeof(T));
+
+                IDictionary<string, object> parameters = TransformObjectToParams(obj);
+                string cmdStr = BuildCommandForInsert(parameters, tableName, 0);
+                IDictionary<string, object> sqlParams = TransformToSqlParam(parameters);
+                var cmd = CreateCommand(cmdStr, sqlParams, connection);
+                int result = await cmd.ExecuteNonQueryAsync();
+                IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
+                status.IsSuccess = result > 0;
+                status.StatusInfo = result;
+                return status;
+            }
+            finally
+            {
+                if (AutoCommit)
+                {
+                    connection.Close();
+                }
+            }
         }
 
         public IStatus<int> NonQuery(string statement, IDictionary<string, object> parameters)
         {
-            throw new NotImplementedException();
+            DbConnection connection = null;
+            connection = CreateConnection();
+
+            try
+            {
+                connection.Open();
+                
+
+             
+ 
+                IDictionary<string, object> sqlParams = TransformToSqlParam(parameters);
+                var cmd = CreateCommand(cmdStr, sqlParams, connection);
+                int result = cmd.ExecuteNonQuery();
+                IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
+                status.IsSuccess = result > 0;
+                status.StatusInfo = result;
+                return status;
+            }
+            finally
+            {
+                if (AutoCommit)
+                {
+                    connection.Close();
+                }
+            }
         }
 
         public Task<IStatus<int>> NonQueryAsync(string statement, IDictionary<string, object> parameters)
