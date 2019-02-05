@@ -215,7 +215,7 @@ namespace Framework.Interfaces
         /// <typeparam name="T"></typeparam>
         /// <param name="matcher">Match predicate encoded in an expression</param>
         /// <returns>Matching instances of T</returns>
-        IEnumerable<T> SelectMatching<T>(Expression<T> matcher);
+        IEnumerable<T> SelectMatching<T>(Expression<Func<T,bool>> matcher);
 
         /// <summary>
         /// Retrieves all instances of T matching the specified expression asynchronously

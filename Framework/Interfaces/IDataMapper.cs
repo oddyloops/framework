@@ -36,6 +36,13 @@ namespace Framework.Interfaces
         string GetKeyName(System.Type objType);
 
         /// <summary>
+        /// Get map name of object's key field
+        /// </summary>
+        /// <param name="objType">Object type</param>
+        /// <returns>Key field map name or null if no key was found</returns>
+        string GetKeyMapName(System.Type objType);
+
+        /// <summary>
         /// Get the value of object's key field
         /// </summary>
         /// <param name="obj">object in question</param>
@@ -62,7 +69,7 @@ namespace Framework.Interfaces
         /// </summary>
         /// <param name="objType">Object metadata</param>
         /// <returns>Map name</returns>
-        string GetObjectName(System.Type objType);
+        string GetObjectMapName(System.Type objType);
 
         /// <summary>
         /// Returns a collection of all the field map names in object metadata. 

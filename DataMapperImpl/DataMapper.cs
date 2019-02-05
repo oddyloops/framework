@@ -215,6 +215,23 @@ namespace DataMapperImpl
             return null;
         }
 
+
+        /// <summary>
+        /// Get map name of object's key field
+        /// </summary>
+        /// <param name="objType">Object type</param>
+        /// <returns>Key field map name or null if no key was found</returns>
+        public string GetKeyMapName(System.Type objType)
+        {
+            PropertyInfo keyField = GetPropertyWithAttr(objType, typeof(PrimaryKeyAttribute));
+            if (keyField != null)
+            {
+                MapAttribute mapAttribute = GetPropertyAttribute(objType, keyField, typeof(MapAttribute)) as MapAttribute;
+                return mapAttribute == null? keyField.Name : mapAttribute.MapName;
+            }
+            return null;
+        }
+
         /// <summary>
         /// Get the value of object's key field
         /// </summary>
@@ -279,7 +296,7 @@ namespace DataMapperImpl
         /// </summary>
         /// <param name="objType">Object metadata</param>
         /// <returns>Map name</returns>
-        public string GetObjectName(System.Type objType)
+        public string GetObjectMapName(System.Type objType)
         {
             var mapAttribute = GetAttribute(objType, typeof(MapAttribute), true);
             return (mapAttribute as MapAttribute).MapName;

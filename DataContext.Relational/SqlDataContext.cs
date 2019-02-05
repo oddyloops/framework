@@ -11,6 +11,7 @@ using Oracle.ManagedDataAccess.Client;
 using Framework.Utils;
 using System.Data;
 using System.Text;
+using System.Linq;
 
 namespace DataContext.Relational
 {
@@ -87,37 +88,59 @@ namespace DataContext.Relational
         {
             DbCommand cmd = connection.CreateCommand();
             cmd.CommandText = command;
-
-            foreach(var param in parameters)
+            if (parameters != null)
             {
-                cmd.Parameters.Add(CreateParameter(param.Key, param.Value));
+                foreach (var param in parameters)
+                {
+                    cmd.Parameters.Add(CreateParameter(param.Key, param.Value));
+                }
             }
             return cmd;
         }
 
-        private IDictionary<string,object> TransformObjectToParams(object record)
+        private IDictionary<string,object> TransformObjectToParams(object record, bool addNulls = true)
         {
          
             IDictionary<string, object> paramRec = new SortedDictionary<string, object>(); //need to maintain order for traversals
             IList<string> fieldNames = Mapper.GetFieldNames(record.GetType());
             foreach(var field in fieldNames)
             {
-                paramRec.Add(field, Mapper.GetField(field, record));
+                if (addNulls || Mapper.GetField(field, record) != null)
+                {
+                    paramRec.Add(field, Mapper.GetField(field, record));
+                }
             }
             return paramRec;
         }
 
-        private IDictionary<string,object> TransformToSqlParam(IDictionary<string,object> parameters)
+        private IDictionary<string,object> TransformToSqlParam(IDictionary<string,object> parameters, int paramOffset)
         {
-            IDictionary<string, object> sqlParameters = new Dictionary<string, object>();
+            IDictionary<string, object> sqlParameters = new SortedDictionary<string, object>();
             int paramCount = 0;
             foreach(var param in parameters)
             {
-                sqlParameters.Add("@P" + paramCount, param.Value);
+                sqlParameters.Add("@P" + (paramCount + paramOffset), param.Value);
                 paramCount++;
             }
 
             return sqlParameters;
+        }
+
+        private string BuildCommandForUpdate(IDictionary<string,object> parameters, string tableName, int paramOffset)
+        {
+            StringBuilder command = new StringBuilder($"UPDATE {_tablePrefix}{tableName} SET ");
+            bool isFirst = true;
+            int paramCount = 0;
+            foreach(var param in parameters)
+            {
+                if(!isFirst)
+                {
+                    command.Append(",");
+                }
+                command.Append($"{param.Key} = @P{paramCount + paramOffset}");
+                isFirst = false;
+            }
+            return command.ToString();
         }
 
         private string BuildCommandForInsert(IDictionary<string,object> parameters,string tableName, int paramOffset)
@@ -129,22 +152,47 @@ namespace DataContext.Relational
                 if(!isFirst)
                 {
                     command.Append(",");
-                    isFirst = false;
                 }
                 command.Append(param.Key);
+                isFirst = false;
             }
             command.Append(") VALUES (");
 
+            isFirst = true;
             for(int i =0; i < parameters.Count; i++)
             {
                 if (!isFirst)
                 {
                     command.Append(",");
-                    isFirst = false;
                 }
                 command.Append("@P" + (paramOffset + i));
+                isFirst = false;
             }
             return command.ToString();
+
+        }
+
+
+        private IDictionary<string,object> ConvertReaderToKV(DbDataReader reader)
+        {
+            IDictionary<string, object> keyValues = new Dictionary<string, object>();
+            for(int i =0; i < reader.FieldCount; i++)
+            {
+                keyValues.Add(reader.GetName(i), reader.GetValue(i));
+            }
+            return keyValues;
+        }
+
+        private string BuildRangeQueryForProvider(int skip, int length)
+        {
+            switch(_dbType)
+            {
+                case DbType.MySql:
+                    return $"LIMIT {skip},{length}";
+                default:
+                    return $"OFFSET {skip} ROWS FETCH NEXT {length} ROWS ONLY"; //sql server and oracle share the same syntax
+                
+            }
 
         }
 
@@ -203,8 +251,8 @@ namespace DataContext.Relational
             try
             {
                 connection.Open();
-                string tableName = Mapper.GetObjectName(obj.GetType());
-                string keyName = Mapper.GetKeyName(obj.GetType());
+                string tableName = Mapper.GetObjectMapName(obj.GetType());
+                string keyName = Mapper.GetKeyMapName(obj.GetType());
 
                 string cmdStr = $"DELETE FROM {_tablePrefix}{tableName} WHERE {keyName} = @P0";
                 IDictionary<string, object> parameters = new Dictionary<string, object> {
@@ -234,8 +282,8 @@ namespace DataContext.Relational
             try
             {
                 connection.Open();
-                string tableName = Mapper.GetObjectName(typeof(T));
-                string keyName = Mapper.GetKeyName(typeof(T));
+                string tableName = Mapper.GetObjectMapName(typeof(T));
+                string keyName = Mapper.GetKeyMapName(typeof(T));
 
                 string cmdStr = $"DELETE FROM {_tablePrefix}{tableName} WHERE {keyName} = @P0";
                 IDictionary<string, object> parameters = new Dictionary<string, object> {
@@ -266,8 +314,8 @@ namespace DataContext.Relational
             {
 
                 connection.Open();
-                string tableName = Mapper.GetObjectName(typeof(T));
-                string keyName = Mapper.GetKeyName(typeof(T));
+                string tableName = Mapper.GetObjectMapName(typeof(T));
+                string keyName = Mapper.GetKeyMapName(typeof(T));
                 
 
                 //create data table
@@ -287,7 +335,7 @@ namespace DataContext.Relational
                 var cmd = CreateCommand(cmdStr, parameters, connection);
                 int result = cmd.ExecuteNonQuery();
                 IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
-                status.IsSuccess = result > 0;
+                status.IsSuccess = result == objList.Count;
                 status.StatusInfo = result;
                 return status;
             }
@@ -309,8 +357,8 @@ namespace DataContext.Relational
             {
 
                 connection.Open();
-                string tableName = Mapper.GetObjectName(typeof(T));
-                string keyName = Mapper.GetKeyName(typeof(T));
+                string tableName = Mapper.GetObjectMapName(typeof(T));
+                string keyName = Mapper.GetKeyMapName(typeof(T));
 
 
                 //create data table
@@ -353,8 +401,8 @@ namespace DataContext.Relational
             {
 
                 await connection.OpenAsync();
-                string tableName = Mapper.GetObjectName(typeof(T));
-                string keyName = Mapper.GetKeyName(typeof(T));
+                string tableName = Mapper.GetObjectMapName(typeof(T));
+                string keyName = Mapper.GetKeyMapName(typeof(T));
 
 
                 //create data table
@@ -374,7 +422,7 @@ namespace DataContext.Relational
                 var cmd = CreateCommand(cmdStr, parameters, connection);
                 int result = await cmd.ExecuteNonQueryAsync();
                 IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
-                status.IsSuccess = result > 0;
+                status.IsSuccess = result == objList.Count;
                 status.StatusInfo = result;
                 return status;
             }
@@ -396,8 +444,8 @@ namespace DataContext.Relational
             {
 
                 await connection.OpenAsync();
-                string tableName = Mapper.GetObjectName(typeof(T));
-                string keyName = Mapper.GetKeyName(typeof(T));
+                string tableName = Mapper.GetObjectMapName(typeof(T));
+                string keyName = Mapper.GetKeyMapName(typeof(T));
 
 
                 //create data table
@@ -417,7 +465,7 @@ namespace DataContext.Relational
                 var cmd = CreateCommand(cmdStr, parameters, connection);
                 int result = await cmd.ExecuteNonQueryAsync();
                 IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
-                status.IsSuccess = result > 0;
+                status.IsSuccess = result == keyList.Count;
                 status.StatusInfo = result;
                 return status;
             }
@@ -439,8 +487,8 @@ namespace DataContext.Relational
             try
             {
                 await connection.OpenAsync();
-                string tableName = Mapper.GetObjectName(obj.GetType());
-                string keyName = Mapper.GetKeyName(obj.GetType());
+                string tableName = Mapper.GetObjectMapName(obj.GetType());
+                string keyName = Mapper.GetKeyMapName(obj.GetType());
 
                 string cmdStr = $"DELETE FROM {_tablePrefix}{tableName} WHERE {keyName} = @P0";
                 IDictionary<string, object> parameters = new Dictionary<string, object> {
@@ -470,8 +518,8 @@ namespace DataContext.Relational
             try
             {
                 await connection.OpenAsync();
-                string tableName = Mapper.GetObjectName(typeof(T));
-                string keyName = Mapper.GetKeyName(typeof(T));
+                string tableName = Mapper.GetObjectMapName(typeof(T));
+                string keyName = Mapper.GetKeyMapName(typeof(T));
 
                 string cmdStr = $"DELETE FROM {_tablePrefix}{tableName} WHERE {keyName} = @P0";
                 IDictionary<string, object> parameters = new Dictionary<string, object> {
@@ -501,11 +549,11 @@ namespace DataContext.Relational
             try
             {
                 connection.Open();
-                string tableName = Mapper.GetObjectName(typeof(T));
+                string tableName = Mapper.GetObjectMapName(typeof(T));
                 
                 IDictionary<string, object> parameters = TransformObjectToParams(obj);
                 string cmdStr = BuildCommandForInsert(parameters, tableName,0);
-                IDictionary<string, object> sqlParams = TransformToSqlParam(parameters);
+                IDictionary<string, object> sqlParams = TransformToSqlParam(parameters,0);
                 var cmd = CreateCommand(cmdStr, sqlParams, connection);
                 int result = cmd.ExecuteNonQuery();
                 IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
@@ -530,25 +578,25 @@ namespace DataContext.Relational
             try
             {
                 connection.Open();
-                string tableName = Mapper.GetObjectName(typeof(T));
+                string tableName = Mapper.GetObjectMapName(typeof(T));
                 StringBuilder cmdStr = new StringBuilder();
-                int totalParams = 0;
+                
                 IDictionary<string, object> combinedSqlParam = new Dictionary<string, object>();
                 foreach(var obj in objList)
                 {
                     IDictionary<string, object> parameters = TransformObjectToParams(obj);
-                    cmdStr.Append(BuildCommandForInsert(parameters, tableName, totalParams) + ";\n");
-                    IDictionary<string, object> sqlParams = TransformToSqlParam(parameters);
+                    cmdStr.Append(BuildCommandForInsert(parameters, tableName, combinedSqlParam.Count) + ";\n");
+                    IDictionary<string, object> sqlParams = TransformToSqlParam(parameters, combinedSqlParam.Count);
                     foreach(var param in sqlParams)
                     {
                         combinedSqlParam.Add(param);
                     }
-
+                   
                 }
                 var cmd = CreateCommand(cmdStr.ToString(), combinedSqlParam, connection);
                 int result = cmd.ExecuteNonQuery();
                 IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
-                status.IsSuccess = result > 0;
+                status.IsSuccess = result == objList.Count;
                 status.StatusInfo = result;
                 return status;
             }
@@ -569,26 +617,26 @@ namespace DataContext.Relational
             try
             {
                 await connection.OpenAsync();
-                string tableName = Mapper.GetObjectName(typeof(T));
+                string tableName = Mapper.GetObjectMapName(typeof(T));
                 StringBuilder cmdStr = new StringBuilder();
-                int totalParams = 0;
+               
                 IDictionary<string, object> combinedSqlParam = new Dictionary<string, object>();
                 foreach (var obj in objList)
                 {
                     IDictionary<string, object> parameters = TransformObjectToParams(obj);
-                    cmdStr.Append(BuildCommandForInsert(parameters, tableName, totalParams) + ";\n");
-                    IDictionary<string, object> sqlParams = TransformToSqlParam(parameters);
+                    cmdStr.Append(BuildCommandForInsert(parameters, tableName, combinedSqlParam.Count) + ";\n");
+                    IDictionary<string, object> sqlParams = TransformToSqlParam(parameters, combinedSqlParam.Count);
                     foreach (var param in sqlParams)
                     {
                         combinedSqlParam.Add(param);
                     }
-                    totalParams += sqlParams.Count;
+                    
 
                 }
                 var cmd = CreateCommand(cmdStr.ToString(), combinedSqlParam, connection);
                 int result = await cmd.ExecuteNonQueryAsync();
                 IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
-                status.IsSuccess = result > 0;
+                status.IsSuccess = result == objList.Count;
                 status.StatusInfo = result;
                 return status;
             }
@@ -609,11 +657,11 @@ namespace DataContext.Relational
             try
             {
                 await connection.OpenAsync();
-                string tableName = Mapper.GetObjectName(typeof(T));
+                string tableName = Mapper.GetObjectMapName(typeof(T));
 
                 IDictionary<string, object> parameters = TransformObjectToParams(obj);
                 string cmdStr = BuildCommandForInsert(parameters, tableName, 0);
-                IDictionary<string, object> sqlParams = TransformToSqlParam(parameters);
+                IDictionary<string, object> sqlParams = TransformToSqlParam(parameters,0);
                 var cmd = CreateCommand(cmdStr, sqlParams, connection);
                 int result = await cmd.ExecuteNonQueryAsync();
                 IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
@@ -638,12 +686,9 @@ namespace DataContext.Relational
             try
             {
                 connection.Open();
-                
-
-             
  
-                IDictionary<string, object> sqlParams = TransformToSqlParam(parameters);
-                var cmd = CreateCommand(cmdStr, sqlParams, connection);
+                IDictionary<string, object> sqlParams = TransformToSqlParam(parameters,0);
+                var cmd = CreateCommand(statement, sqlParams, connection);
                 int result = cmd.ExecuteNonQuery();
                 IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
                 status.IsSuccess = result > 0;
@@ -659,94 +704,380 @@ namespace DataContext.Relational
             }
         }
 
-        public Task<IStatus<int>> NonQueryAsync(string statement, IDictionary<string, object> parameters)
+        public async Task<IStatus<int>> NonQueryAsync(string statement, IDictionary<string, object> parameters)
         {
-            throw new NotImplementedException();
+            DbConnection connection = null;
+            connection = CreateConnection();
+
+            try
+            {
+                await connection.OpenAsync();
+
+
+
+
+                IDictionary<string, object> sqlParams = TransformToSqlParam(parameters,0);
+                var cmd = CreateCommand(statement, sqlParams, connection);
+                int result = await cmd.ExecuteNonQueryAsync();
+                IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
+                status.IsSuccess = result > 0;
+                status.StatusInfo = result;
+                return status;
+            }
+            finally
+            {
+                if (AutoCommit)
+                {
+                    connection.Close();
+                }
+            }
         }
 
         public IEnumerable<T> Query<T>(string query, IDictionary<string, object> parameters)
         {
-            throw new NotImplementedException();
+            DbConnection connection = null;
+            connection = CreateConnection();
+
+            try
+            {
+                connection.Open();
+
+                IDictionary<string, object> sqlParams = TransformToSqlParam(parameters,0);
+                var cmd = CreateCommand(query, sqlParams, connection);
+                var reader = cmd.ExecuteReader();
+                while(reader.Read())
+                {
+                    T record = Mapper.CreateInstanceFromFields<T>(ConvertReaderToKV(reader));
+                    yield return record;
+                }
+            }
+            finally
+            {
+                if (AutoCommit)
+                {
+                    connection.Close();
+                }
+            }
         }
 
         public IEnumerable<IDictionary<string, object>> Query(string query, IDictionary<string, object> parameters)
         {
-            throw new NotImplementedException();
+            DbConnection connection = null;
+            connection = CreateConnection();
+
+            try
+            {
+                connection.Open();
+
+                IDictionary<string, object> sqlParams = TransformToSqlParam(parameters,0);
+                var cmd = CreateCommand(query, sqlParams, connection);
+                var reader = cmd.ExecuteReader();
+                while (reader.Read())
+                {
+                    yield return ConvertReaderToKV(reader);
+                }
+            }
+            finally
+            {
+                if (AutoCommit)
+                {
+                    connection.Close();
+                }
+            }
         }
 
         public Task<IEnumerable<T>> QueryAsync<T>(string query, IDictionary<string, object> parameters)
         {
-            throw new NotImplementedException();
+            return Task.FromResult(Query<T>(query, parameters));
         }
 
         public Task<IEnumerable<IDictionary<string, object>>> QueryAsync(string query, IDictionary<string, object> parameters)
         {
-            throw new NotImplementedException();
+            return Task.FromResult(Query(query, parameters));
         }
 
         public void RollBack()
         {
-            throw new NotImplementedException();
+            if (!AutoCommit)
+            {
+                foreach (var connTran in _connectionTransactionMap)
+                {
+                    if (connTran.Key.State == System.Data.ConnectionState.Open && connTran.Value != null)
+                    {
+                        connTran.Value.Rollback();
+                        connTran.Key.Close();
+                    }
+                }
+                _connectionTransactionMap.Clear();
+            }
         }
 
         public IEnumerable<T> SelectAll<T>()
         {
-            throw new NotImplementedException();
+            DbConnection connection = null;
+            connection = CreateConnection();
+
+            try
+            {
+                connection.Open();
+
+               
+                var cmd = CreateCommand($"SELECT * FROM {_tablePrefix}{Mapper.GetObjectMapName(typeof(T))}" , null, connection);
+                var reader = cmd.ExecuteReader();
+                while (reader.Read())
+                {
+                    T record = Mapper.CreateInstanceFromFields<T>(ConvertReaderToKV(reader));
+                    yield return record;
+                }
+            }
+            finally
+            {
+                if (AutoCommit)
+                {
+                    connection.Close();
+                }
+            }
         }
 
         public Task<IEnumerable<T>> SelectAllAsync<T>()
         {
-            throw new NotImplementedException();
+            return Task.FromResult(SelectAll<T>());
         }
 
-        public IEnumerable<T> SelectMatching<T>(Expression<T> matcher)
+        public IEnumerable<T> SelectMatching<T>(Expression<Func<T,bool>> matcher)
         {
-            throw new NotImplementedException();
+            return from record in SelectAll<T>() where matcher.Compile()(record) select record;
         }
 
         public Task<IEnumerable<T>> SelectMatchingAsync<T>(Expression<Func<T, bool>> matcher)
         {
-            throw new NotImplementedException();
+            return Task.FromResult(SelectMatching<T>(matcher));
         }
 
         public T SelectOne<T, K>(K key)
         {
-            throw new NotImplementedException();
+            DbConnection connection = null;
+            connection = CreateConnection();
+
+            try
+            {
+                connection.Open();
+                string tableName = Mapper.GetObjectMapName(typeof(T));
+                string keyName = Mapper.GetKeyMapName(typeof(T));
+
+                var cmd = CreateCommand($"SELECT TOP 1 * FROM {_tablePrefix}{tableName} WHERE {keyName} = @P0", new Dictionary<string, object> { { "@P0",key} }, connection);
+                var reader = cmd.ExecuteReader();
+                if (reader.Read())
+                {
+                    T record = Mapper.CreateInstanceFromFields<T>(ConvertReaderToKV(reader));
+                    return record;
+                }
+                return default(T);
+            }
+            finally
+            {
+                if (AutoCommit)
+                {
+                    connection.Close();
+                }
+            }
         }
 
-        public Task<T> SelectOneAsync<T, K>(K key)
+        public async Task<T> SelectOneAsync<T, K>(K key)
         {
-            throw new NotImplementedException();
+            DbConnection connection = null;
+            connection = CreateConnection();
+
+            try
+            {
+                await connection.OpenAsync();
+                string tableName = Mapper.GetObjectMapName(typeof(T));
+                string keyName = Mapper.GetKeyMapName(typeof(T));
+
+                var cmd = CreateCommand($"SELECT TOP 1 * FROM {_tablePrefix}{tableName} WHERE {keyName} = @P0", new Dictionary<string, object> { { "@P0", key } }, connection);
+                var reader = await cmd.ExecuteReaderAsync();
+                if (await reader.ReadAsync())
+                {
+                    T record = Mapper.CreateInstanceFromFields<T>(ConvertReaderToKV(reader));
+                    return record;
+                }
+                return default(T);
+            }
+            finally
+            {
+                if (AutoCommit)
+                {
+                    connection.Close();
+                }
+            }
         }
 
         public IEnumerable<T> SelectRange<T>(int from, int length)
         {
-            throw new NotImplementedException();
+            DbConnection connection = null;
+            connection = CreateConnection();
+
+            try
+            {
+                connection.Open();
+
+                string tableName = Mapper.GetObjectMapName(typeof(T));
+                var cmd = CreateCommand($"SELECT * FROM {_tablePrefix}{tableName} {BuildRangeQueryForProvider(from,length)}", null, connection);
+                var reader = cmd.ExecuteReader();
+                while (reader.Read())
+                {
+                    T record = Mapper.CreateInstanceFromFields<T>(ConvertReaderToKV(reader));
+                    yield return record;
+                }
+            }
+            finally
+            {
+                if (AutoCommit)
+                {
+                    connection.Close();
+                }
+            }
         }
 
         public Task<IEnumerable<T>> SelectRangeAsync<T>(int from, int length)
         {
-            throw new NotImplementedException();
+            return Task.FromResult(SelectRange<T>(from, length));
         }
 
         public IStatus<int> Update<T>(T obj, bool updateNulls = false)
         {
-            throw new NotImplementedException();
+            DbConnection connection = null;
+            connection = CreateConnection();
+
+            try
+            {
+                connection.Open();
+
+                string tableName = Mapper.GetObjectMapName(typeof(T));
+                object key = Mapper.GetKeyValue(obj);
+                IDictionary<string, object> objParam = TransformObjectToParams(obj, updateNulls);
+                IDictionary<string, object> sqlParam = TransformToSqlParam(objParam, 0);
+                var cmd = CreateCommand(BuildCommandForUpdate(objParam,tableName,0), sqlParam, connection);
+                int result = cmd.ExecuteNonQuery();
+                IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
+                status.IsSuccess = result > 0;
+                status.StatusInfo = result;
+                return status;
+            }
+            finally
+            {
+                if (AutoCommit)
+                {
+                    connection.Close();
+                }
+            }
         }
 
         public IStatus<int> UpdateAll<T>(IList<T> objList, bool updateNulls = false)
         {
-            throw new NotImplementedException();
+            DbConnection connection = null;
+            connection = CreateConnection();
+
+            try
+            {
+                connection.Open();
+                string tableName = Mapper.GetObjectMapName(typeof(T));
+                StringBuilder cmdStr = new StringBuilder();
+
+                IDictionary<string, object> combinedSqlParam = new Dictionary<string, object>();
+                foreach (var obj in objList)
+                {
+                    IDictionary<string, object> parameters = TransformObjectToParams(obj);
+                    cmdStr.Append(BuildCommandForUpdate(parameters, tableName, combinedSqlParam.Count) + ";\n");
+                    IDictionary<string, object> sqlParams = TransformToSqlParam(parameters, combinedSqlParam.Count);
+                    foreach (var param in sqlParams)
+                    {
+                        combinedSqlParam.Add(param);
+                    }
+
+                }
+                var cmd = CreateCommand(cmdStr.ToString(), combinedSqlParam, connection);
+                int result = cmd.ExecuteNonQuery();
+                IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
+                status.IsSuccess = result == objList.Count;
+                status.StatusInfo = result;
+                return status;
+            }
+            finally
+            {
+                if (AutoCommit)
+                {
+                    connection.Close();
+                }
+            }
         }
 
-        public Task<IStatus<int>> UpdateAllAsync<T>(IList<T> objList, bool updateNulls = false)
+        public async Task<IStatus<int>> UpdateAllAsync<T>(IList<T> objList, bool updateNulls = false)
         {
-            throw new NotImplementedException();
+            DbConnection connection = null;
+            connection = CreateConnection();
+
+            try
+            {
+                await connection.OpenAsync();
+                string tableName = Mapper.GetObjectMapName(typeof(T));
+                StringBuilder cmdStr = new StringBuilder();
+
+                IDictionary<string, object> combinedSqlParam = new Dictionary<string, object>();
+                foreach (var obj in objList)
+                {
+                    IDictionary<string, object> parameters = TransformObjectToParams(obj);
+                    cmdStr.Append(BuildCommandForUpdate(parameters, tableName, combinedSqlParam.Count) + ";\n");
+                    IDictionary<string, object> sqlParams = TransformToSqlParam(parameters, combinedSqlParam.Count);
+                    foreach (var param in sqlParams)
+                    {
+                        combinedSqlParam.Add(param);
+                    }
+
+                }
+                var cmd = CreateCommand(cmdStr.ToString(), combinedSqlParam, connection);
+                int result = await cmd.ExecuteNonQueryAsync();
+                IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
+                status.IsSuccess = result == objList.Count;
+                status.StatusInfo = result;
+                return status;
+            }
+            finally
+            {
+                if (AutoCommit)
+                {
+                    connection.Close();
+                }
+            }
         }
 
-        public Task<IStatus<int>> UpdateAsync<T>(T obj, bool updateNulls = false)
+        public async Task<IStatus<int>> UpdateAsync<T>(T obj, bool updateNulls = false)
         {
-            throw new NotImplementedException();
+            DbConnection connection = null;
+            connection = CreateConnection();
+
+            try
+            {
+                await connection.OpenAsync();
+
+                string tableName = Mapper.GetObjectMapName(typeof(T));
+                object key = Mapper.GetKeyValue(obj);
+                IDictionary<string, object> objParam = TransformObjectToParams(obj, updateNulls);
+                IDictionary<string, object> sqlParam = TransformToSqlParam(objParam, 0);
+                var cmd = CreateCommand(BuildCommandForUpdate(objParam, tableName, 0), sqlParam, connection);
+                int result = await cmd.ExecuteNonQueryAsync();
+                IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
+                status.IsSuccess = result > 0;
+                status.StatusInfo = result;
+                return status;
+            }
+            finally
+            {
+                if (AutoCommit)
+                {
+                    connection.Close();
+                }
+            }
         }
 
         #region IDisposable Support
@@ -759,6 +1090,7 @@ namespace DataContext.Relational
                 if (disposing)
                 {
                     // TODO: dispose managed state (managed objects).
+
                 }
 
                 // TODO: free unmanaged resources (unmanaged objects) and override a finalizer below.
