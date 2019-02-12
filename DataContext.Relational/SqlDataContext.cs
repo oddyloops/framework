@@ -15,7 +15,9 @@ using System.Linq;
 
 namespace DataContext.Relational
 {
-
+    /// <summary>
+    /// Supported database types
+    /// </summary>
     public enum DbType
     {
         SqlServer,
@@ -23,6 +25,9 @@ namespace DataContext.Relational
         Oracle
     }
 
+    /// <summary>
+    /// A concrete implementation of the IDataContext interface for relational databases
+    /// </summary>
     [Export("Relational", typeof(IDataContext))]
     public class SqlDataContext : IDataContext
     {
@@ -35,18 +40,30 @@ namespace DataContext.Relational
 
         private string _tablePrefix;
 
-
+        /// <summary>
+        /// A reference to a data mapper component required to map query results to concrete objects
+        /// </summary>
         [Import]
         public IDataMapper Mapper { get; set; }
 
+        /// <summary>
+        /// A reference to a configuration component used to access config settings required by the data provider
+        /// </summary>
         [Import("JsonConfig")]
         public IConfiguration Config { get; set; }
 
-
+        /// <summary>
+        /// A flag to indicate if changes made should be automatically committed to data source or not (if applicable).
+        /// This should be set in a config file if using dependency injection
+        /// </summary>
         public bool AutoCommit { get; set; }
 
 
         #region Helpers
+        /// <summary>
+        /// Helper method for creating a concrete connection object based on current database platform
+        /// </summary>
+        /// <returns>A platform dependent database connection object</returns>
         private DbConnection CreateConnection()
         {
             DbConnection connection = null;
@@ -71,6 +88,12 @@ namespace DataContext.Relational
             return connection;
         }
 
+        /// <summary>
+        /// Helper method for converting a key value pair to a concrete database named parameter
+        /// </summary>
+        /// <param name="key">Parameter name</param>
+        /// <param name="value">Parameter value</param>
+        /// <returns>A platform dependent database parameter</returns>
         private DbParameter CreateParameter(string key, object value)
         {
             switch (_dbType)
@@ -84,6 +107,13 @@ namespace DataContext.Relational
             }
         }
 
+        /// <summary>
+        /// Helper method for creating a database command based on current database platform
+        /// </summary>
+        /// <param name="command">SQL command statement</param>
+        /// <param name="parameters">SQL command parameters</param>
+        /// <param name="connection">Platform dependent database connection</param>
+        /// <returns>Platform dependent database command</returns>
         private DbCommand CreateCommand(string command, IDictionary<string, object> parameters,DbConnection connection)
         {
             DbCommand cmd = connection.CreateCommand();
@@ -98,6 +128,12 @@ namespace DataContext.Relational
             return cmd;
         }
 
+        /// <summary>
+        /// Serializes an object into a key value pair of field and values
+        /// </summary>
+        /// <param name="record">Object to be serialized</param>
+        /// <param name="addNulls">A flag indicating if null fields should be serialized</param>
+        /// <returns>A key value pair of object's field and values</returns>
         private IDictionary<string,object> TransformObjectToParams(object record, bool addNulls = true)
         {
          
@@ -113,6 +149,12 @@ namespace DataContext.Relational
             return paramRec;
         }
 
+        /// <summary>
+        /// Replaces the key in the serialized key-value pairs with sequential parameter labels
+        /// </summary>
+        /// <param name="parameters">Serialized key-value pairs</param>
+        /// <param name="paramOffset">Parameter label sequence offset</param>
+        /// <returns>A new key-value pair with the key being sequential parameter labels</returns>
         private IDictionary<string,object> TransformToSqlParam(IDictionary<string,object> parameters, int paramOffset)
         {
             IDictionary<string, object> sqlParameters = new SortedDictionary<string, object>();
@@ -126,6 +168,13 @@ namespace DataContext.Relational
             return sqlParameters;
         }
 
+        /// <summary>
+        /// Builds SQL update statement
+        /// </summary>
+        /// <param name="parameters">Serialized object key-value pair with the key being field names</param>
+        /// <param name="tableName">Table name in statement</param>
+        /// <param name="paramOffset">Parameter label sequence offset</param>
+        /// <returns>A parameterized update statement string</returns>
         private string BuildCommandForUpdate(IDictionary<string,object> parameters, string tableName, int paramOffset)
         {
             StringBuilder command = new StringBuilder($"UPDATE {_tablePrefix}{tableName} SET ");
@@ -143,6 +192,14 @@ namespace DataContext.Relational
             return command.ToString();
         }
 
+
+        /// <summary>
+        /// Builds SQL insert statement
+        /// </summary>
+        /// <param name="parameters">Serialized object key-value pair with the key being field names</param>
+        /// <param name="tableName">Table name in statement</param>
+        /// <param name="paramOffset">Parameter label sequence offset</param>
+        /// <returns>A parameterized insert statement string</returns>
         private string BuildCommandForInsert(IDictionary<string,object> parameters,string tableName, int paramOffset)
         {
             StringBuilder command = new StringBuilder($"INSERT INTO {_tablePrefix}{tableName}(");
@@ -172,7 +229,11 @@ namespace DataContext.Relational
 
         }
 
-
+        /// <summary>
+        /// Converts a database record into a serialized key-value pair
+        /// </summary>
+        /// <param name="reader">Database record</param>
+        /// <returns>Serialized key-value pair</returns>
         private IDictionary<string,object> ConvertReaderToKV(DbDataReader reader)
         {
             IDictionary<string, object> keyValues = new Dictionary<string, object>();
@@ -183,6 +244,12 @@ namespace DataContext.Relational
             return keyValues;
         }
 
+        /// <summary>
+        /// Builds part of query responsible for paging based on the current database platform
+        /// </summary>
+        /// <param name="skip">Page offset</param>
+        /// <param name="length">Page length</param>
+        /// <returns>SQL paging statement</returns>
         private string BuildRangeQueryForProvider(int skip, int length)
         {
             switch(_dbType)
@@ -198,7 +265,9 @@ namespace DataContext.Relational
 
         #endregion
 
-
+        /// <summary>
+        /// Constructs an instance of this class based on configuration values
+        /// </summary>
         public SqlDataContext()
         {
             AutoCommit = Config.GetValue(ConfigConstants.RELATIONAL_DB_AUTOCOMMIT) == "1";
@@ -217,6 +286,9 @@ namespace DataContext.Relational
 
         }
 
+        /// <summary>
+        /// Commits data transaction to data source if applicable
+        /// </summary>
         public void Commit()
         {
             if (!AutoCommit)
@@ -233,16 +305,31 @@ namespace DataContext.Relational
             }
         }
 
+        /// <summary>
+        /// Connects data provider to its source
+        /// </summary>
         public void Connect()
         {
             Connect(ConfigConstants.RELATIONAL_CONNECTION_STRING);
         }
 
+
+        /// <summary>
+        /// Connects data provider to its source addressed by supplied connection string
+        /// </summary>
+        /// <param name="str">Connection string</param>
         public void Connect(string str)
         {
             _connectionString = Config.GetValue(str);
         }
 
+
+        /// <summary>
+        /// Removes a record matching the instance of T from the data source
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="obj">Instance of T to be removed</param>
+        /// <returns>A status indicating result of the operation</returns>
         public IStatus<int> Delete<T>(T obj)
         {
             DbConnection connection = null;
@@ -274,6 +361,13 @@ namespace DataContext.Relational
             }
         }
 
+        /// <summary>
+        /// Removes a record of type T based on its key 
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <typeparam name="K"></typeparam>
+        /// <param name="key">Key value for record to be removed</param>
+        /// <returns>A status indicating result of the operation</returns>
         public IStatus<int> Delete<T, K>(K key)
         {
             DbConnection connection = null;
@@ -305,6 +399,13 @@ namespace DataContext.Relational
             }
         }
 
+
+        /// <summary>
+        /// Removes multiple records matching each instances of T from the data source
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="objList">A collection of T instances matching records to be removed</param>
+        /// <returns>A status indicating result of the operation</returns>
         public IStatus<int> DeleteAll<T>(IList<T> objList)
         {
             DbConnection connection = null;
@@ -348,6 +449,13 @@ namespace DataContext.Relational
             }
         }
 
+        /// <summary>
+        /// Removes multiple records of type T based on their keys
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <typeparam name="K"></typeparam>
+        /// <param name="keyList">List of matching keys</param>
+        /// <returns>A status indicating result of the operation</returns>
         public IStatus<int> DeleteAll<T, K>(IList<K> keyList)
         {
             DbConnection connection = null;
@@ -392,6 +500,12 @@ namespace DataContext.Relational
 
         }
 
+        /// <summary>
+        /// Removes multiple records matching each instances of T from the data source asynchronously
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="objList">A collection of T instances matching records to be removed</param>
+        /// <returns>A completion token encapsulating the status indicating the result of the operation</returns>
         public async Task<IStatus<int>> DeleteAllAsync<T>(IList<T> objList)
         {
             DbConnection connection = null;
@@ -435,6 +549,13 @@ namespace DataContext.Relational
             }
         }
 
+        /// <summary>
+        /// Removes multiple records of type T based on their keys asynchronously
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <typeparam name="K"></typeparam>
+        /// <param name="keyList">List of matching keys</param>
+        /// <returns>A completion token encapsulating the status indicating the result of the operation</returns>
         public async Task<IStatus<int>> DeleteAllAsync<T, K>(IList<K> keyList)
         {
             DbConnection connection = null;
@@ -479,6 +600,12 @@ namespace DataContext.Relational
 
         }
 
+        /// <summary>
+        /// Removes a record matching the instance of T from the data source asynchronously
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="obj">Instance of T to be removed</param>
+        /// <returns>A completion token encapsulating the status indicating the result of the operation</returns>
         public async Task<IStatus<int>> DeleteAsync<T>(T obj)
         {
             DbConnection connection = null;
@@ -510,6 +637,14 @@ namespace DataContext.Relational
             }
         }
 
+
+        /// <summary>
+        /// Removes a record of type T based on its key asynchronously
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <typeparam name="K"></typeparam>
+        /// <param name="key">Key value for record to be removed</param>
+        /// <returns>A completion token encapsulating the status indicating the result of the operation</returns>
         public async Task<IStatus<int>> DeleteAsync<T, K>(K key)
         {
             DbConnection connection = null;
@@ -541,6 +676,12 @@ namespace DataContext.Relational
             }
         }
 
+        /// <summary>
+        /// Adds an instance of T to the data source
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="obj">Instance of type T to be added</param>
+        /// <returns>A status indicating result of the operation</returns>
         public IStatus<int> Insert<T>(T obj)
         {
             DbConnection connection = null;
@@ -570,6 +711,13 @@ namespace DataContext.Relational
             }
         }
 
+
+        /// <summary>
+        /// Adds a collection of type T objects to the data source
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="objList">Collection of type T to be added</param>
+        /// <returns>A status indicating result of the operation</returns>
         public IStatus<int> InsertAll<T>(IList<T> objList)
         {
             DbConnection connection = null;
@@ -609,6 +757,12 @@ namespace DataContext.Relational
             }
         }
 
+        /// <summary>
+        /// Adds a collection of type T objects to the data source asynchronously
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="objList">Collection of type T to be added</param>
+        /// <returns>A completion token encapsulating the status indicating the result of the operation</returns>
         public async Task<IStatus<int>> InsertAllAsync<T>(IList<T> objList)
         {
             DbConnection connection = null;
@@ -649,6 +803,13 @@ namespace DataContext.Relational
             }
         }
 
+
+        /// <summary>
+        /// Adds an instance of T to the data source asynchronously
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="obj">Instance of type T to be added</param>
+        /// <returns>A completion token encapsulating the status indicating the result of the operation</returns>
         public async Task<IStatus<int>> InsertAsync<T>(T obj)
         {
             DbConnection connection = null;
@@ -678,6 +839,13 @@ namespace DataContext.Relational
             }
         }
 
+
+        /// <summary>
+        /// Executes a data modification statement against the data source
+        /// </summary>
+        /// <param name="statement">Data modification statement</param>
+        /// <param name="parameters">Statement parameter mapping</param>
+        /// <returns>A status indicating the result of the operation</returns>
         public IStatus<int> NonQuery(string statement, IDictionary<string, object> parameters)
         {
             DbConnection connection = null;
@@ -704,6 +872,13 @@ namespace DataContext.Relational
             }
         }
 
+
+        /// <summary>
+        /// Executes a data modification statement against the data source asynchronously
+        /// </summary>
+        /// <param name="statement">Data modification statement</param>
+        /// <param name="parameters">Statement parameter mapping</param>
+        /// <returns>A completion token encapsulating status indicating the result of the operation</returns>
         public async Task<IStatus<int>> NonQueryAsync(string statement, IDictionary<string, object> parameters)
         {
             DbConnection connection = null;
@@ -733,6 +908,13 @@ namespace DataContext.Relational
             }
         }
 
+        /// <summary>
+        /// Run a data retrieval statement directly against data source for record type T
+        /// </summary>
+        /// <typeparam name="T">Record type T</typeparam>
+        /// <param name="query">Data retrieval statement</param>
+        /// <param name="parameters">Statement parameter mapping</param>
+        /// <returns>Matching instances of T</returns>
         public IEnumerable<T> Query<T>(string query, IDictionary<string, object> parameters)
         {
             DbConnection connection = null;
@@ -760,6 +942,12 @@ namespace DataContext.Relational
             }
         }
 
+        /// <summary>
+        /// Runs a data retrieval statement directly against the data source for one or more arbitrary record types
+        /// </summary>
+        /// <param name="query">Data retrieval statement</param>
+        /// <param name="parameters">Statement parameter mapping</param>
+        /// <returns>Query results with each record's fields encoded as a series of key-value pairs</returns>
         public IEnumerable<IDictionary<string, object>> Query(string query, IDictionary<string, object> parameters)
         {
             DbConnection connection = null;
@@ -786,16 +974,33 @@ namespace DataContext.Relational
             }
         }
 
+        /// <summary>
+        /// Run a data retrieval statement directly against data source for record type T asynchronously
+        /// </summary>
+        /// <typeparam name="T">Record type T</typeparam>
+        /// <param name="query">Data retrieval statement</param>
+        /// <param name="parameters">Statement parameter mapping</param>
+        /// <returns>A completion token encapsulating the matching instances of T</returns>
         public Task<IEnumerable<T>> QueryAsync<T>(string query, IDictionary<string, object> parameters)
         {
             return Task.FromResult(Query<T>(query, parameters));
         }
 
+        /// <summary>
+        /// Runs a data retrieval statement directly against the data source for one or more arbitrary record types asynchronously
+        /// </summary>
+        /// <param name="query">Data retrieval statement</param>
+        /// <param name="parameters">Statement parameter mapping</param>
+        /// <returns>A completion token encapsulating the query results with each record's fields encoded as a series of key-value pairs</returns>
         public Task<IEnumerable<IDictionary<string, object>>> QueryAsync(string query, IDictionary<string, object> parameters)
         {
             return Task.FromResult(Query(query, parameters));
         }
 
+
+        /// <summary>
+        /// Reverts uncommitted data transactions if applicable
+        /// </summary>
         public void RollBack()
         {
             if (!AutoCommit)
@@ -812,6 +1017,12 @@ namespace DataContext.Relational
             }
         }
 
+
+        /// <summary>
+        /// Retrieves all instances of T from the data source
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <returns>An iterator for traversing the returned records</returns>
         public IEnumerable<T> SelectAll<T>()
         {
             DbConnection connection = null;
@@ -839,21 +1050,48 @@ namespace DataContext.Relational
             }
         }
 
+        /// <summary>
+        /// Retrieves all instances of T from the data source asynchronously
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <returns>A completion token encapsulating the iterator for traversing the returned records</returns>
         public Task<IEnumerable<T>> SelectAllAsync<T>()
         {
             return Task.FromResult(SelectAll<T>());
         }
 
+
+        /// <summary>
+        /// Retrieves all instances of T matching the specified expression
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="matcher">Match predicate encoded in an expression</param>
+        /// <returns>Matching instances of T</returns>
         public IEnumerable<T> SelectMatching<T>(Expression<Func<T,bool>> matcher)
         {
             return from record in SelectAll<T>() where matcher.Compile()(record) select record;
         }
 
+
+        /// <summary>
+        /// Retrieves all instances of T matching the specified expression asynchronously
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="matcher">Match predicate encoded in an expression</param>
+        /// <returns>A completion token encapsulating the matching instances of T</returns>
         public Task<IEnumerable<T>> SelectMatchingAsync<T>(Expression<Func<T, bool>> matcher)
         {
             return Task.FromResult(SelectMatching<T>(matcher));
         }
 
+
+        /// <summary>
+        /// Retrieves a single instance of T based on the specified key
+        /// </summary>
+        /// <typeparam name="T">Record type</typeparam>
+        /// <typeparam name="K">Key type</typeparam>
+        /// <param name="key">Key corresponding to the retrieved record</param>
+        /// <returns>The record matching the key</returns>
         public T SelectOne<T, K>(K key)
         {
             DbConnection connection = null;
@@ -883,6 +1121,13 @@ namespace DataContext.Relational
             }
         }
 
+        /// <summary>
+        /// Retrieves a single instance of T based on the specified key asynchronously
+        /// </summary>
+        /// <typeparam name="T">Record type</typeparam>
+        /// <typeparam name="K">Key type</typeparam>
+        /// <param name="key">Key corresponding to the retrieved record</param>
+        /// <returns>A completion token encapsulating the record matching the key</returns>
         public async Task<T> SelectOneAsync<T, K>(K key)
         {
             DbConnection connection = null;
@@ -912,6 +1157,14 @@ namespace DataContext.Relational
             }
         }
 
+
+        /// <summary>
+        /// Returns all instances of T within a specified page
+        /// </summary>
+        /// <typeparam name="T">Record type</typeparam>
+        /// <param name="from">Page offset</param>
+        /// <param name="length">Page size</param>
+        /// <returns>Instances of T within the data page</returns>
         public IEnumerable<T> SelectRange<T>(int from, int length)
         {
             DbConnection connection = null;
@@ -939,11 +1192,26 @@ namespace DataContext.Relational
             }
         }
 
+
+        /// <summary>
+        /// Returns all instances of T within a specified page asynchronously
+        /// </summary>
+        /// <typeparam name="T">Record type</typeparam>
+        /// <param name="from">Page offset</param>
+        /// <param name="length">Page size</param>
+        /// <returns>A completion token encapsulating the instances of T within the data page</returns>
         public Task<IEnumerable<T>> SelectRangeAsync<T>(int from, int length)
         {
             return Task.FromResult(SelectRange<T>(from, length));
         }
 
+        /// <summary>
+        /// Updates a record in the data source matching the instance of T
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="obj">Instance of T matching record to be updated</param>
+        /// <param name="updateNulls">A flag indicating if null updates count</param>
+        /// <returns>A status indicating result of the operation</returns>
         public IStatus<int> Update<T>(T obj, bool updateNulls = false)
         {
             DbConnection connection = null;
@@ -973,6 +1241,14 @@ namespace DataContext.Relational
             }
         }
 
+
+        /// <summary>
+        /// Updates multiple records the data source matching the instances of T
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="objList">List of matching records</param>
+        /// <param name="updateNulls">A flag indicating if null updates count</param>
+        /// <returns>A status indicating result of the operation</returns>
         public IStatus<int> UpdateAll<T>(IList<T> objList, bool updateNulls = false)
         {
             DbConnection connection = null;
@@ -987,7 +1263,7 @@ namespace DataContext.Relational
                 IDictionary<string, object> combinedSqlParam = new Dictionary<string, object>();
                 foreach (var obj in objList)
                 {
-                    IDictionary<string, object> parameters = TransformObjectToParams(obj);
+                    IDictionary<string, object> parameters = TransformObjectToParams(obj,updateNulls);
                     cmdStr.Append(BuildCommandForUpdate(parameters, tableName, combinedSqlParam.Count) + ";\n");
                     IDictionary<string, object> sqlParams = TransformToSqlParam(parameters, combinedSqlParam.Count);
                     foreach (var param in sqlParams)
@@ -1012,6 +1288,13 @@ namespace DataContext.Relational
             }
         }
 
+        /// <summary>
+        /// Updates multiple records the data source matching the instances of T asynchronously
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="objList">List of matching records</param>
+        /// <param name="updateNulls">A flag indicating if null updates count</param>
+        /// <returns>A completion token encapsulating the status indicating the result of the operation</returns>
         public async Task<IStatus<int>> UpdateAllAsync<T>(IList<T> objList, bool updateNulls = false)
         {
             DbConnection connection = null;
@@ -1026,7 +1309,7 @@ namespace DataContext.Relational
                 IDictionary<string, object> combinedSqlParam = new Dictionary<string, object>();
                 foreach (var obj in objList)
                 {
-                    IDictionary<string, object> parameters = TransformObjectToParams(obj);
+                    IDictionary<string, object> parameters = TransformObjectToParams(obj, updateNulls);
                     cmdStr.Append(BuildCommandForUpdate(parameters, tableName, combinedSqlParam.Count) + ";\n");
                     IDictionary<string, object> sqlParams = TransformToSqlParam(parameters, combinedSqlParam.Count);
                     foreach (var param in sqlParams)
@@ -1051,6 +1334,15 @@ namespace DataContext.Relational
             }
         }
 
+
+
+        /// <summary>
+        /// Updates a record in the data source matching the instance of T asynchronously
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="obj">Instance of T matching record to be updated</param>
+        /// <param name="updateNulls">A flag indicating if null updates count</param>
+        /// <returns>A completion token encapsulating the status indicating the result of the operation</returns>
         public async Task<IStatus<int>> UpdateAsync<T>(T obj, bool updateNulls = false)
         {
             DbConnection connection = null;
@@ -1090,7 +1382,13 @@ namespace DataContext.Relational
                 if (disposing)
                 {
                     // TODO: dispose managed state (managed objects).
-
+                    if(_connectionTransactionMap != null)
+                    {
+                        foreach(var connMap in _connectionTransactionMap)
+                        {
+                            connMap.Key.Close();
+                        }
+                    }
                 }
 
                 // TODO: free unmanaged resources (unmanaged objects) and override a finalizer below.
