@@ -22,6 +22,11 @@ namespace Framework.Interfaces
         IList<ILogListener> LogListeners { get; set; }
 
         /// <summary>
+        /// Loads listener list by scanning all ILogListener implementations within MEF container
+        /// </summary>
+        void LoadListenersFromContainer();
+
+        /// <summary>
         /// Informational Logging
         /// </summary>
         /// <param name="message">Log message</param>
@@ -30,7 +35,7 @@ namespace Framework.Interfaces
         /// <summary>
         /// Informational Logging
         /// </summary>
-        /// <param name="messageObj">Object encapsualting log message</param>
+        /// <param name="messageObj">Object encapsulating log message</param>
         void Info(object messageObj);
 
         /// <summary>
@@ -42,7 +47,7 @@ namespace Framework.Interfaces
         /// <summary>
         /// Logs debug messages
         /// </summary>
-        /// <param name="messageObj">Object encapsualting log message</param>
+        /// <param name="messageObj">Object encapsulating log message</param>
         void Debug(object messageObj);
 
         /// <summary>
@@ -54,7 +59,7 @@ namespace Framework.Interfaces
         /// <summary>
         /// Logs warning messages
         /// </summary>
-        /// <param name="messageObj">Object encapsualting log message</param>
+        /// <param name="messageObj">Object encapsulating log message</param>
         void Warn(object messageObj);
 
         /// <summary>
@@ -66,7 +71,7 @@ namespace Framework.Interfaces
         /// <summary>
         /// Logs error messages
         /// </summary>
-        /// <param name="messageObj">Object encapsualting log message</param>
+        /// <param name="messageObj">Object encapsulating log message</param>
         void Error(object messageObj);
 
         /// <summary>
@@ -78,19 +83,19 @@ namespace Framework.Interfaces
         /// <summary>
         /// Logs crash messages
         /// </summary>
-        /// <param name="messageObj">Object encapsualting log message</param>
+        /// <param name="messageObj">Object encapsulating log message</param>
         void Fatal(object messageObj);
 
         /// <summary>
-        /// Logs message regardless of log level, except OFF
+        /// Logs message regardless of log level
         /// </summary>
         /// <param name="message">Log messaage</param>
         void Log(string message);
 
         /// <summary>
-        /// Logs message regardless of log level, except OFF
+        /// Logs message regardless of log level
         /// </summary>
-        /// <param name="messageObj">Object encapsualting log message</param>
+        /// <param name="messageObj">Object encapsulating log message</param>
         void Log(object messageObj);
     }
 }

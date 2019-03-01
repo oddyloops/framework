@@ -5,12 +5,19 @@ using System.Composition;
 using System.Collections.Generic;
 using System.Text;
 using System.Diagnostics;
+using Framework.Utils;
 
 namespace Logger.MSImpl
 {
+    /// <summary>
+    /// A concrete implementation of the ILogger Interface
+    /// </summary>
     [Export(typeof(ILogger))]
     public class Logger : ILogger
     {
+        /// <summary>
+        /// A reference to a configuration component used to access config settings required by the logger
+        /// </summary>
         [Import("JsonConfig")]
         public IConfiguration Config { get; set; }
 
@@ -19,10 +26,19 @@ namespace Logger.MSImpl
         private bool _includeCaller;
         private bool _autoFlush;
 
+        /// <summary>
+        /// List of listeners for this logger
+        /// </summary>
         public IList<ILogListener> LogListeners { get; set; }
 
 
         #region Message
+        /// <summary>
+        /// Helper method for formatting log messages based on options specified for this logger instance
+        /// </summary>
+        /// <param name="message">Log message</param>
+        /// <param name="caller">Name of method logging the message</param>
+        /// <returns>Formatted log message</returns>
         private string BuildLogString(string message,string caller)
         {
             StringBuilder finalMsg = new StringBuilder();
@@ -54,8 +70,20 @@ namespace Logger.MSImpl
             //false by default
             _includeCaller = Config.GetValue(ConfigConstants.INCLUDE_CALLER) == null ? false : Config.GetValue(ConfigConstants.INCLUDE_CALLER) == "1";
         }
-    
 
+        /// <summary>
+        /// Loads listener list by scanning all ILogListener implementations within MEF container
+        /// </summary>
+        public void LoadListenersFromContainer()
+        {
+            LogListeners = Util.Container.CreateInstances<ILogListener>();
+        }
+
+
+        /// <summary>
+        /// Logs debug messages
+        /// </summary>
+        /// <param name="message">Log message</param>
         public void Debug(string message)
         {
             StackTrace stackTrace = new StackTrace();
@@ -69,6 +97,10 @@ namespace Logger.MSImpl
             }
         }
 
+        /// <summary>
+        /// Logs debug messages
+        /// </summary>
+        /// <param name="messageObj">Object encapsulating log message</param>
         public void Debug(object messageObj)
         {
             StackTrace stackTrace = new StackTrace();
@@ -82,6 +114,10 @@ namespace Logger.MSImpl
             }
         }
 
+        /// <summary>
+        /// Logs error messages
+        /// </summary>
+        /// <param name="message">Log message</param>
         public void Error(string message)
         {
             StackTrace stackTrace = new StackTrace();
@@ -95,6 +131,11 @@ namespace Logger.MSImpl
             }
         }
 
+
+        /// <summary>
+        /// Logs error messages
+        /// </summary>
+        /// <param name="messageObj">Object encapsulating log message</param>
         public void Error(object messageObj)
         {
             StackTrace stackTrace = new StackTrace();
@@ -108,6 +149,10 @@ namespace Logger.MSImpl
             }
         }
 
+        /// <summary>
+        /// Logs crash messages
+        /// </summary>
+        /// <param name="message">Log message</param>
         public void Fatal(string message)
         {
             StackTrace stackTrace = new StackTrace();
@@ -121,6 +166,10 @@ namespace Logger.MSImpl
             }
         }
 
+        /// <summary>
+        /// Logs crash messages
+        /// </summary>
+        /// <param name="messageObj">Object encapsulating log message</param>
         public void Fatal(object messageObj)
         {
             StackTrace stackTrace = new StackTrace();
@@ -134,6 +183,11 @@ namespace Logger.MSImpl
             }
         }
 
+
+        /// <summary>
+        /// Informational Logging
+        /// </summary>
+        /// <param name="message">Log message</param>
         public void Info(string message)
         {
             StackTrace stackTrace = new StackTrace();
@@ -147,6 +201,10 @@ namespace Logger.MSImpl
             }
         }
 
+        /// <summary>
+        /// Informational Logging
+        /// </summary>
+        /// <param name="messageObj">Object encapsulating log message</param>
         public void Info(object messageObj)
         {
             StackTrace stackTrace = new StackTrace();
@@ -160,6 +218,10 @@ namespace Logger.MSImpl
             }
         }
 
+        /// <summary>
+        /// Logs message regardless of log level
+        /// </summary>
+        /// <param name="message">Log messaage</param>
         public void Log(string message)
         {
             StackTrace stackTrace = new StackTrace();
@@ -171,6 +233,10 @@ namespace Logger.MSImpl
             }
         }
 
+        /// <summary>
+        /// Logs message regardless of log level
+        /// </summary>
+        /// <param name="messageObj">Object encapsulating log message</param>
         public void Log(object messageObj)
         {
             StackTrace stackTrace = new StackTrace();
@@ -182,26 +248,35 @@ namespace Logger.MSImpl
             }
         }
 
+
+        /// <summary>
+        /// Logs warning messages
+        /// </summary>
+        /// <param name="message">Log message</param>
         public void Warn(string message)
         {
             StackTrace stackTrace = new StackTrace();
             string caller = stackTrace.GetFrame(1).GetMethod().Name;
             foreach (var listener in LogListeners)
             {
-                if (((int)listener.LogLevel) <= ((int)LogLevels.Warning))
+                if (((int)listener.LogLevel) <= ((int)LogLevels.Warn))
                 {
                     listener.Write("WRN: " + BuildLogString(message, caller));
                 }
             }
         }
 
+        /// <summary>
+        /// Logs warning messages
+        /// </summary>
+        /// <param name="messageObj">Object encapsulating log message</param>
         public void Warn(object messageObj)
         {
             StackTrace stackTrace = new StackTrace();
             string caller = stackTrace.GetFrame(1).GetMethod().Name;
             foreach (var listener in LogListeners)
             {
-                if (((int)listener.LogLevel) <= ((int)LogLevels.Warning))
+                if (((int)listener.LogLevel) <= ((int)LogLevels.Warn))
                 {
                     listener.Write("WRN: " + BuildLogString(messageObj.ToString(), caller));
                 }

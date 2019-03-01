@@ -22,5 +22,10 @@ namespace Logger.MSImpl
         /// Determines if caller function name prefix is added to log messages
         /// </summary>
         internal const string INCLUDE_CALLER = "INCLUDE_CALLER";
+
+        /// <summary>
+        /// Specifies the log level for the default console log listener implementation
+        /// </summary>
+        internal const string CONSOLE_LOG_LEVEL = "CONSOLE_LOG_LEVEL";
     }
 }
