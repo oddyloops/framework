@@ -39,7 +39,7 @@ namespace Logger.MSImpl
                 {
                     LogLevel = (LogLevels)Enum.Parse(typeof(LogLevels), logLevelConf);
                 }
-                catch(Exception ex)
+                catch(Exception)
                 {
                     throw new Exception("Valid log levels are None, Warn, Debug, Info, Fatal, and Error");
                 }
