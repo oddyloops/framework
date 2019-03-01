@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Framework.Enums;
+using System;
 using System.Collections.Generic;
 using System.Text;
 
@@ -14,6 +15,11 @@ namespace Framework.Interfaces
         /// A reference to a configuration component used to access config settings required by the logger
         /// </summary>
         IConfiguration Config { get; set; }
+
+        /// <summary>
+        /// List of listeners for this logger
+        /// </summary>
+        IList<ILogListener> LogListeners { get; set; }
 
         /// <summary>
         /// Informational Logging
