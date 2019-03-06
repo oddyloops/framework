@@ -17,7 +17,7 @@ namespace Framework.Interfaces
         /// <summary>
         /// Writes a string to the listener's source
         /// </summary>
-        /// <param name="message"></param>
+        /// <param name="message">Log message</param>
         void Write(string message);
 
         /// <summary>
