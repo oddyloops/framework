@@ -60,6 +60,25 @@ namespace Logger.MSImpl
 
         public FileLogListener()
         {
+            //check if configuration for log level exists
+            string logLevelConf = Config.GetValue(ConfigConstants.FILE_LOG_LEVEL);
+            if (logLevelConf == null)
+            {
+                //debug by default
+                LogLevel = LogLevels.Debug;
+            }
+            else
+            {
+                try
+                {
+                    LogLevel = (LogLevels)Enum.Parse(typeof(LogLevels), logLevelConf);
+                }
+                catch (Exception)
+                {
+                    throw new Exception("Valid log levels are None, Warn, Debug, Info, Fatal, and Error");
+                }
+            }
+
             string isRollingConf = Config.GetValue(ConfigConstants.IS_ROLLING_FILE);
             _isRolling = (isRollingConf == null) ? false : isRollingConf == "1";
 
