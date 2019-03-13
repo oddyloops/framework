@@ -57,6 +57,7 @@ namespace DataContext.Relational
         /// This should be set in a config file if using dependency injection
         /// </summary>
         public bool AutoCommit { get; set; }
+        public string DBName { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
 
 
         #region Helpers
