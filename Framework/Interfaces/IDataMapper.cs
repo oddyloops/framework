@@ -78,5 +78,12 @@ namespace Framework.Interfaces
         /// <returns>Collection of field map names</returns>
         IList<string> GetFieldNames(System.Type objType);
 
+        /// <summary>
+        /// Returns NoSql collection name for data type
+        /// </summary>
+        /// <param name="objType">Data type</param>
+        /// <returns>Collection name or class name if NoSqlCollection Attribute was not found</returns>
+        string GetNoSqlCollectionName(System.Type objType);
+
     }
 }

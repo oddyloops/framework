@@ -322,6 +322,17 @@ namespace DataMapperImpl
 
             return mapNames;
         }
+
+        /// <summary>
+        /// Returns NoSql collection name for data type
+        /// </summary>
+        /// <param name="objType">Data type</param>
+        /// <returns>Collection name or class name if NoSqlCollection Attribute was not found</returns>
+        public string GetNoSqlCollectionName(System.Type objType)
+        {
+            NoSqlCollectionAttribute attr = GetAttribute(objType, typeof(NoSqlCollectionAttribute), true) as NoSqlCollectionAttribute;
+            return attr == null ? objType.Name : attr.CollectionName;
+        }
     }
 
 }
