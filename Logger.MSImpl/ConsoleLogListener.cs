@@ -10,7 +10,7 @@ namespace Logger.MSImpl
     /// <summary>
     /// An implementation of ILogListener for logging to the console
     /// </summary>
-    [Export(typeof(ILogListener))]
+    [Export("Console",typeof(ILogListener))]
     public class ConsoleLogListener : ILogListener
     {
         /// <summary>

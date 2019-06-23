@@ -7,7 +7,7 @@ using System.Text;
 
 namespace Logger.MSImpl
 {
-    [Export(typeof(ILogger))]
+    [Export("File",typeof(ILogListener))]
     public class FileLogListener : ILogListener
     {
         private bool _isRolling;
