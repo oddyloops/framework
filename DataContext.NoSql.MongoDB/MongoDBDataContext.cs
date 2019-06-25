@@ -18,6 +18,8 @@ namespace DataContext.NoSql.MongoDB
 
         private IMongoClient _client;
 
+        private IClientSessionHandle _transSession;
+
 
         #region Helpers
 
@@ -50,15 +52,20 @@ namespace DataContext.NoSql.MongoDB
         public bool AutoCommit { get; set; }
         public string DBName { get; set; }
 
+
         public MongoDBDataContext()
         {
             DBName = Config.GetValue(ConfigConstants.DEFAULT_MONGODB_DATABASE);
-            
+            AutoCommit = Config.GetValue(ConfigConstants.MONGODB_AUTOCOMMIT) == "1";
         }
 
         public void Commit()
         {
-            throw new NotImplementedException();
+            if(!AutoCommit)
+            {
+                _transSession.CommitTransaction();
+                _transSession = _client.StartSession();
+            }
         }
 
         public void Connect()
@@ -71,6 +78,10 @@ namespace DataContext.NoSql.MongoDB
         {
             _connectionString = str;
             _client = new MongoClient(_connectionString);
+            if(!AutoCommit)
+            {
+                _transSession = _client.StartSession();
+            }
             
            
         }
@@ -201,9 +212,7 @@ namespace DataContext.NoSql.MongoDB
 
         public IStatus<int> NonQuery(string statement, IDictionary<string, object> parameters)
         {
-            var db = _client.GetDatabase(DBName);
-            var command = new JsonCommand<BsonDocument>(statement);
-            db.run
+            throw new NotImplementedException();
         }
 
         public Task<IStatus<int>> NonQueryAsync(string statement, IDictionary<string, object> parameters)
@@ -233,7 +242,11 @@ namespace DataContext.NoSql.MongoDB
 
         public void RollBack()
         {
-            throw new NotImplementedException();
+            if(!AutoCommit)
+            {
+                _transSession.AbortTransaction();
+                _transSession = _client.StartSession();
+            }
         }
 
         public IEnumerable<T> SelectAll<T>()
@@ -300,27 +313,63 @@ namespace DataContext.NoSql.MongoDB
                 keyList.Add(Mapper.GetKeyValue(obj).ToString());
             }
             IList<T> records = SelectMatching<T>( x => keyList.Contains(Mapper.GetKeyValue(x).ToString())).ToList();
-            
-            foreach(var record in records)
+            string keyName = Mapper.GetKeyName(typeof(T));
+            int updateCount = 0;
+            for(int i =0; i < keyList.Count;i++)
             {
-                record.
+                Util.DeepCopy(objList[i], records[i], !updateNulls, keyName);
+                var result = collection.ReplaceOne(BuildFilterDefinitionForObjectKey<T, string>(keyList[i]), records[i]);
+                if(result.IsAcknowledged)
+                {
+                    updateCount++;
+                }
             }
+           
+            IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
+            status.IsSuccess = updateCount == keyList.Count;
+            status.StatusInfo = updateCount;
+            return status;
+        }
+
+        public async Task<IStatus<int>> UpdateAllAsync<T>(IList<T> objList, bool updateNulls = false)
+        {
+            var collection = GetCollectionForType<T>();
+            IList<string> keyList = new List<string>(objList.Count);
+
+            foreach (T obj in objList)
+            {
+                keyList.Add(Mapper.GetKeyValue(obj).ToString());
+            }
+            IList<T> records =(await SelectMatchingAsync<T>(x => keyList.Contains(Mapper.GetKeyValue(x).ToString()))).ToList();
+            string keyName = Mapper.GetKeyName(typeof(T));
+            int updateCount = 0;
+            for (int i = 0; i < keyList.Count; i++)
+            {
+                Util.DeepCopy(objList[i], records[i], !updateNulls, keyName);
+                var result =await  collection.ReplaceOneAsync(BuildFilterDefinitionForObjectKey<T, string>(keyList[i]), records[i]);
+                if (result.IsAcknowledged)
+                {
+                    updateCount++;
+                }
+            }
+
+            IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
+            status.IsSuccess = updateCount == keyList.Count;
+            status.StatusInfo = updateCount;
+            return status;
+        }
+
+        public async Task<IStatus<int>> UpdateAsync<T>(T obj, bool updateNulls = false)
+        {
+            var collection = GetCollectionForType<T>();
+            string keyString = Mapper.GetKeyValue(obj).ToString();
+            T record = await SelectOneAsync<T, string>(keyString);
             Util.DeepCopy(obj, record, !updateNulls, Mapper.GetKeyName(typeof(T)));
-            var result = collection.ReplaceOne(BuildFilterDefinitionForObjectKey<T, string>(keyString), record);
+            var result = await collection.ReplaceOneAsync(BuildFilterDefinitionForObjectKey<T, string>(keyString), record);
             IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
             status.IsSuccess = result.IsAcknowledged;
             status.StatusInfo = (int)result.ModifiedCount;
             return status;
-        }
-
-        public Task<IStatus<int>> UpdateAllAsync<T>(IList<T> objList, bool updateNulls = false)
-        {
-            throw new NotImplementedException();
-        }
-
-        public Task<IStatus<int>> UpdateAsync<T>(T obj, bool updateNulls = false)
-        {
-            throw new NotImplementedException();
         }
 
         #region IDisposable Support

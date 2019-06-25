@@ -9,7 +9,7 @@ namespace DataContext.Relational
     {
         /// <summary>
         /// Indicates whether transactions are used or not (a false means yes, thereby
-        /// giving the caller the responsibility of committing transactions)
+        /// giving the caller the responsibility of committing transactions) [0-for false, 1-for true]
         /// </summary>
         internal const string RELATIONAL_DB_AUTOCOMMIT = "RELATIONAL_DB_AUTOCOMMIT";
 
