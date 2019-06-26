@@ -295,11 +295,15 @@ namespace DataMapperImpl
         /// Gets the map name of an object class
         /// </summary>
         /// <param name="objType">Object metadata</param>
-        /// <returns>Map name</returns>
+        /// <returns>Map name (if unmapped, returns object type name) </returns>
         public string GetObjectMapName(System.Type objType)
         {
             var mapAttribute = GetAttribute(objType, typeof(MapAttribute), true);
-            return (mapAttribute as MapAttribute).MapName;
+            if (mapAttribute != null)
+            {
+                return (mapAttribute as MapAttribute).MapName;
+            }
+            return objType.Name;
         }
 
 
@@ -322,6 +326,7 @@ namespace DataMapperImpl
 
             return mapNames;
         }
+
     }
 
 }

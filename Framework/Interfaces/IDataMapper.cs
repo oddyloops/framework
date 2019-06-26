@@ -78,5 +78,6 @@ namespace Framework.Interfaces
         /// <returns>Collection of field map names</returns>
         IList<string> GetFieldNames(System.Type objType);
 
+
     }
 }

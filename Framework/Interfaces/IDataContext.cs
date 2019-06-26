@@ -29,6 +29,11 @@ namespace Framework.Interfaces
         bool AutoCommit { get; set; }
 
         /// <summary>
+        /// Specifies the database name of data source where applicable (typically in document based databases)
+        /// </summary>
+        string DBName { get; set; }
+
+        /// <summary>
         /// Connects data provider to its source
         /// </summary>
         void Connect();
