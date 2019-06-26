@@ -295,11 +295,15 @@ namespace DataMapperImpl
         /// Gets the map name of an object class
         /// </summary>
         /// <param name="objType">Object metadata</param>
-        /// <returns>Map name</returns>
+        /// <returns>Map name (if unmapped, returns object type name) </returns>
         public string GetObjectMapName(System.Type objType)
         {
             var mapAttribute = GetAttribute(objType, typeof(MapAttribute), true);
-            return (mapAttribute as MapAttribute).MapName;
+            if (mapAttribute != null)
+            {
+                return (mapAttribute as MapAttribute).MapName;
+            }
+            return objType.Name;
         }
 
 
@@ -323,16 +327,6 @@ namespace DataMapperImpl
             return mapNames;
         }
 
-        /// <summary>
-        /// Returns NoSql collection name for data type
-        /// </summary>
-        /// <param name="objType">Data type</param>
-        /// <returns>Collection name or class name if NoSqlCollection Attribute was not found</returns>
-        public string GetNoSqlCollectionName(System.Type objType)
-        {
-            NoSqlCollectionAttribute attr = GetAttribute(objType, typeof(NoSqlCollectionAttribute), true) as NoSqlCollectionAttribute;
-            return attr == null ? objType.Name : attr.CollectionName;
-        }
     }
 
 }
