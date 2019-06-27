@@ -156,7 +156,7 @@ namespace DataContext.Relational
         /// <param name="parameters">Serialized key-value pairs</param>
         /// <param name="paramOffset">Parameter label sequence offset</param>
         /// <returns>A new key-value pair with the key being sequential parameter labels</returns>
-        private IDictionary<string,object> TransformToSqlParam(IDictionary<string,object> parameters, int paramOffset)
+        private static IDictionary<string,object> TransformToSqlParam(IDictionary<string,object> parameters, int paramOffset)
         {
             IDictionary<string, object> sqlParameters = new SortedDictionary<string, object>();
             int paramCount = 0;
@@ -235,7 +235,7 @@ namespace DataContext.Relational
         /// </summary>
         /// <param name="reader">Database record</param>
         /// <returns>Serialized key-value pair</returns>
-        private IDictionary<string,object> ConvertReaderToKV(DbDataReader reader)
+        private static IDictionary<string,object> ConvertReaderToKV(DbDataReader reader)
         {
             IDictionary<string, object> keyValues = new Dictionary<string, object>();
             for(int i =0; i < reader.FieldCount; i++)

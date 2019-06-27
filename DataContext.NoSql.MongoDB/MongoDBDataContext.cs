@@ -69,7 +69,7 @@ namespace DataContext.NoSql.MongoDB
         /// <param name="query">Command string</param>
         /// <param name="parameters">Command parameters</param>
         /// <returns>JsonCommand object wrapping the parameterized mongodb command</returns>
-        private JsonCommand<BsonDocument> BuildCommandObject(string query,IDictionary<string,object> parameters)
+        private static JsonCommand<BsonDocument> BuildCommandObject(string query,IDictionary<string,object> parameters)
         {
             foreach(var parm in parameters)
             {
