@@ -1,91 +1,25 @@
 ﻿using Framework.Interfaces;
 using Framework.Utils;
-using MongoDB.Bson;
-using MongoDB.Bson.Serialization;
-using MongoDB.Driver;
+using Microsoft.Azure.Documents;
+using Microsoft.Azure.Documents.Client;
 using System;
 using System.Collections.Generic;
 using System.Composition;
-using System.Linq;
 using System.Linq.Expressions;
+using System.Net;
+using System.Linq;
 using System.Threading.Tasks;
 
-namespace DataContext.NoSql.MongoDB
+namespace DataContext.NoSql.DocumentDB
 {
     /// <summary>
-    /// A concrete implementation of the IDataContext interface for mongo DB
+    /// A concrete implementation of IDataContext for an Azure Document DB data source
     /// </summary>
-    [Export("NoSql.MongoDB",typeof(IDataContext))]
-    public class MongoDBDataContext : IDataContext
+    [Export("NoSql.DocumentDB",typeof(IDataContext))]
+    public class DocumentDBDataContext : IDataContext
     {
-        private string _connectionString;
 
-        private IMongoClient _client;
-
-        private IClientSessionHandle _transSession;
-
-
-        #region Helpers
-        /// <summary>
-        /// Helper method for extracting collection mapped to type with the MapAttribute
-        /// </summary>
-        /// <typeparam name="T">Type</typeparam>
-        /// <returns>MongoDB collection object</returns>
-        private IMongoCollection<T> GetCollectionForType<T>()
-        {
-            var db = _client.GetDatabase(DBName);
-            string collectionName = Mapper.GetObjectMapName(typeof(T));
-            return db.GetCollection<T>(collectionName);
-        }
-
-        /// <summary>
-        /// Helper method for defining a collection filter for a mapped object
-        /// </summary>
-        /// <typeparam name="T">Object type</typeparam>
-        /// <param name="obj">Mapped object</param>
-        /// <returns>A filter predicate matching object's attributes</returns>
-        private FilterDefinition<T> BuildFilterDefinitionForObject<T>(T obj)
-        {
-            var builder = Builders<T>.Filter;
-            return builder.Eq(x => Mapper.GetKeyValue(x).ToString(), Mapper.GetKeyValue(obj).ToString());
-        }
-
-        /// <summary>
-        /// Helper method for defining a collection filter based on an object's key attribute
-        /// </summary>
-        /// <typeparam name="T">Object type</typeparam>
-        /// <typeparam name="K">Key type</typeparam>
-        /// <param name="key">Key value</param>
-        /// <returns>A filter predicate matching object's key value</returns>
-        private FilterDefinition<T> BuildFilterDefinitionForObjectKey<T,K>(K key)
-        {
-            var builder = Builders<T>.Filter;
-            return builder.Eq(x => Mapper.GetKeyValue(x).ToString(), key.ToString());
-        }
-
-        /// <summary>
-        /// Helper method for builing a jsoncommand object from a raw mongo db command string
-        /// </summary>
-        /// <param name="query">Command string</param>
-        /// <param name="parameters">Command parameters</param>
-        /// <returns>JsonCommand object wrapping the parameterized mongodb command</returns>
-        private static JsonCommand<BsonDocument> BuildCommandObject(string query,IDictionary<string,object> parameters)
-        {
-            foreach(var parm in parameters)
-            {
-                if(parm.Value is string || parm.Value is DateTime)
-                {
-                    query = query.Replace(parm.Key, $"'{parm.Value.ToString()}'");
-                }
-                else
-                {
-                    query = query.Replace(parm.Key, parm.Value.ToString());
-                }
-            }
-            return new JsonCommand<BsonDocument>(query);
-        }
-        #endregion
-
+        DocumentClient _client;
 
         /// <summary>
         /// A reference to a data mapper component required to map query results to concrete objects
@@ -99,46 +33,104 @@ namespace DataContext.NoSql.MongoDB
         [Import("JsonConfig")]
         public IConfiguration Config { get; set; }
 
-        /// <summary>
-        /// A flag to indicate if changes made should be automatically committed to data source or not (if applicable).
-        /// This should be set in a config file if using dependency injection
-        /// </summary>
-        public bool AutoCommit { get; set; }
+        public bool AutoCommit { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
 
         /// <summary>
-        /// Name of the mongo DB database
+        /// Database name for the Document DB data source
         /// </summary>
         public string DBName { get; set; }
 
         /// <summary>
-        /// Cosntructs an instance of this class based on configuration values
+        /// List of valid HTTP status codes (anything outside this is considered an operational or network error)
         /// </summary>
-        public MongoDBDataContext()
+        private IList<HttpStatusCode> _validCodes = new List<HttpStatusCode>()
         {
-            DBName = Config.GetValue(ConfigConstants.DEFAULT_MONGODB_DATABASE);
-            AutoCommit = Config.GetValue(ConfigConstants.MONGODB_AUTOCOMMIT) == "1";
+            HttpStatusCode.OK,
+            HttpStatusCode.Created,
+            HttpStatusCode.NoContent
+        };
+
+        #region Helpers
+        /// <summary>
+        /// Helper method for determining whether the supplied response code should raise an exception
+        /// </summary>
+        /// <param name="response">HTTP response code</param>
+        private void ThrowOnFailure(HttpStatusCode response)
+        {
+            if(!_validCodes.Contains(response))
+            {
+                throw new Exception($"An error occured with request to Document DB with HTTP status code: {(int)response}");
+            }
+        }
+
+       /// <summary>
+       /// Builds document DB Uri for collection mapped to type T
+       /// </summary>
+       /// <typeparam name="T">Type T</typeparam>
+       /// <returns>Type T document collection Uri</returns>
+        private Uri UriForType<T>()
+        {
+            return UriFactory.CreateDocumentCollectionUri(DBName, Mapper.GetObjectMapName(typeof(T)));
         }
 
         /// <summary>
-        /// Commits data transaction to data source if applicable
+        /// Builds document DB URI for record
         /// </summary>
+        /// <param name="document">Record</param>
+        /// <returns>Record's document DB URI</returns>
+        private Uri UriForDocument(object document)
+        {
+            return UriFactory.CreateDocumentUri(DBName, Mapper.GetObjectMapName(document.GetType()), Mapper.GetKeyValue(document).ToString());
+        }
+
+        /// <summary>
+        /// Builds document DB URI for record with the key value
+        /// </summary>
+        /// <typeparam name="T">Record type that is mapped to a collection</typeparam>
+        /// <param name="key">Key value used to identify the record</param>
+        /// <returns>Record's document DB URI</returns>
+        private Uri UriForDocumentKey<T>(string key)
+        {
+            return UriFactory.CreateDocumentUri(DBName, Mapper.GetObjectMapName(typeof(T)), key);
+        }
+
+        /// <summary>
+        /// Transforms a key-value pair of query parameters into an Sql parameter collection
+        /// </summary>
+        /// <param name="parameters">KV-Pair of parameters</param>
+        /// <returns>An equivalent Sql parameter collection</returns>
+        private static SqlParameterCollection ConvertParameters(IDictionary<string, object> parameters)
+        {
+            SqlParameterCollection coll = new SqlParameterCollection();
+            foreach(var parm in parameters)
+            {
+                coll.Add(new SqlParameter(parm.Key, parm.Value));
+            }
+            return coll;
+        }
+        #endregion
+
+        /// <summary>
+        /// Constructs the object based on its configuration values
+        /// </summary>
+        public DocumentDBDataContext()
+        {
+            DBName = Config.GetValue(ConfigConstants.DOCUMENT_DB_DATABASE);
+        }
+
+       
         public void Commit()
         {
-            
-            if(!AutoCommit)
-            {
-                _transSession.CommitTransaction();
-                _transSession = _client.StartSession();
-            }
+            throw new NotImplementedException();
         }
+
 
         /// <summary>
         /// Connects data provider to its source
         /// </summary>
         public void Connect()
         {
-            Connect(Config.GetValue(ConfigConstants.MONGODB_CONNECTION_STRING));
-            
+            Connect(ConfigConstants.DOCUMENT_DB_ENDPOINT);
         }
 
 
@@ -148,14 +140,10 @@ namespace DataContext.NoSql.MongoDB
         /// <param name="str">Connection string</param>
         public void Connect(string str)
         {
-            _connectionString = str;
-            _client = new MongoClient(_connectionString);
-            if(!AutoCommit)
-            {
-                _transSession = _client.StartSession();
-            }
-            
-           
+            _client = new DocumentClient(new Uri(Config.GetValue(str)), ConfigConstants.DOCUMENT_DB_AUTH_KEY);
+            var task = _client.CreateDatabaseIfNotExistsAsync(new Database() { Id = DBName });
+            task.RunSynchronously();
+            ThrowOnFailure(task.Result.StatusCode);
         }
 
 
@@ -167,10 +155,12 @@ namespace DataContext.NoSql.MongoDB
         /// <returns>A status indicating result of the operation</returns>
         public IStatus<int> Delete<T>(T obj)
         {
-            var result = GetCollectionForType<T>().DeleteOne(BuildFilterDefinitionForObject(obj));
+            var task = _client.DeleteDocumentAsync(UriForDocument(obj));
+            task.RunSynchronously();
+            ThrowOnFailure(task.Result.StatusCode);
             IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
-            status.IsSuccess = result.IsAcknowledged;
-            status.StatusInfo = (int)result.DeletedCount;
+            status.IsSuccess = task.Result.StatusCode == HttpStatusCode.OK;
+            status.StatusInfo = status.IsSuccess ? 1 : 0;
             return status;
         }
 
@@ -184,10 +174,12 @@ namespace DataContext.NoSql.MongoDB
         /// <returns>A status indicating result of the operation</returns>
         public IStatus<int> Delete<T, K>(K key)
         {
-            var result = GetCollectionForType<T>().DeleteOne(BuildFilterDefinitionForObjectKey<T,K>(key));
+            var task = _client.DeleteDocumentAsync(UriForDocumentKey<T>(key.ToString()));
+            task.RunSynchronously();
+            ThrowOnFailure(task.Result.StatusCode);
             IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
-            status.IsSuccess = result.IsAcknowledged;
-            status.StatusInfo = (int)result.DeletedCount;
+            status.IsSuccess = task.Result.StatusCode == HttpStatusCode.OK;
+            status.StatusInfo = status.IsSuccess ? 1 : 0;
             return status;
         }
 
@@ -200,18 +192,27 @@ namespace DataContext.NoSql.MongoDB
         /// <returns>A status indicating result of the operation</returns>
         public IStatus<int> DeleteAll<T>(IList<T> objList)
         {
-            IList<string> keyList = new List<string>(objList.Count);
-
-            foreach(T obj in objList)
+            IList<Task<ResourceResponse<Document>>> tasks = new List<Task<ResourceResponse<Document>>>();
+      
+            foreach (T obj in objList)
             {
-                keyList.Add(Mapper.GetKeyValue(obj).ToString());
+                tasks.Add(_client.DeleteDocumentAsync(UriForDocument(obj)));
             }
-            var result = GetCollectionForType<T>().DeleteMany<T>( x => keyList.Contains( Mapper.GetKeyValue(x).ToString()));
+            Task.WaitAll(tasks.ToArray());
+            int successCount = 0;
+            foreach (var task in tasks)
+            {
+                if (task.Result.StatusCode == HttpStatusCode.Created)
+                {
+                    successCount++;
+                }
+            }
             IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
-            status.IsSuccess = result.IsAcknowledged;
-            status.StatusInfo = (int)result.DeletedCount;
+            status.IsSuccess = successCount == tasks.Count;
+            status.StatusInfo = successCount;
             return status;
         }
+
 
         /// <summary>
         /// Removes multiple records of type T based on their keys
@@ -222,10 +223,24 @@ namespace DataContext.NoSql.MongoDB
         /// <returns>A status indicating result of the operation</returns>
         public IStatus<int> DeleteAll<T, K>(IList<K> keyList)
         {
-            var result = GetCollectionForType<T>().DeleteMany<T>(x => keyList.Contains((K)Mapper.GetKeyValue(x)));
+            IList<Task<ResourceResponse<Document>>> tasks = new List<Task<ResourceResponse<Document>>>();
+
+            foreach (K key in keyList)
+            {
+                tasks.Add(_client.DeleteDocumentAsync(UriForDocumentKey<T>(key.ToString())));
+            }
+            Task.WaitAll(tasks.ToArray());
+            int successCount = 0;
+            foreach (var task in tasks)
+            {
+                if (task.Result.StatusCode == HttpStatusCode.Created)
+                {
+                    successCount++;
+                }
+            }
             IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
-            status.IsSuccess = result.IsAcknowledged;
-            status.StatusInfo = (int)result.DeletedCount;
+            status.IsSuccess = successCount == tasks.Count;
+            status.StatusInfo = successCount;
             return status;
         }
 
@@ -238,16 +253,23 @@ namespace DataContext.NoSql.MongoDB
         /// <returns>A completion token encapsulating the status indicating the result of the operation</returns>
         public async Task<IStatus<int>> DeleteAllAsync<T>(IList<T> objList)
         {
-            IList<string> keyList = new List<string>(objList.Count);
-
-            foreach(T obj in objList)
+            IList<Task<ResourceResponse<Document>>> tasks = new List<Task<ResourceResponse<Document>>>();
+            foreach (T obj in objList)
             {
-                keyList.Add(Mapper.GetKeyValue(obj).ToString());
+                tasks.Add(_client.DeleteDocumentAsync(UriForDocument(obj)));
             }
-            var result = await GetCollectionForType<T>().DeleteManyAsync<T>( x => keyList.Contains( Mapper.GetKeyValue(x).ToString()));
+            await Task.WhenAll(tasks.ToArray());
+            int successCount = 0;
+            foreach (var task in tasks)
+            {
+                if (task.Result.StatusCode == HttpStatusCode.Created)
+                {
+                    successCount++;
+                }
+            }
             IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
-            status.IsSuccess = result.IsAcknowledged;
-            status.StatusInfo = (int)result.DeletedCount;
+            status.IsSuccess = successCount == tasks.Count;
+            status.StatusInfo = successCount;
             return status;
         }
 
@@ -261,10 +283,23 @@ namespace DataContext.NoSql.MongoDB
         /// <returns>A completion token encapsulating the status indicating the result of the operation</returns>
         public async Task<IStatus<int>> DeleteAllAsync<T, K>(IList<K> keyList)
         {
-            var result =await GetCollectionForType<T>().DeleteManyAsync<T>(x => keyList.Contains((K)Mapper.GetKeyValue(x)));
+            IList<Task<ResourceResponse<Document>>> tasks = new List<Task<ResourceResponse<Document>>>();
+            foreach (K key in keyList)
+            {
+                tasks.Add(_client.DeleteDocumentAsync(UriForDocumentKey<T>(key.ToString())));
+            }
+            await Task.WhenAll(tasks.ToArray());
+            int successCount = 0;
+            foreach (var task in tasks)
+            {
+                if (task.Result.StatusCode == HttpStatusCode.Created)
+                {
+                    successCount++;
+                }
+            }
             IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
-            status.IsSuccess = result.IsAcknowledged;
-            status.StatusInfo = (int)result.DeletedCount;
+            status.IsSuccess = successCount == tasks.Count;
+            status.StatusInfo = successCount;
             return status;
         }
 
@@ -277,10 +312,11 @@ namespace DataContext.NoSql.MongoDB
         /// <returns>A completion token encapsulating the status indicating the result of the operation</returns>
         public async Task<IStatus<int>> DeleteAsync<T>(T obj)
         {
-            var result = await GetCollectionForType<T>().DeleteOneAsync(BuildFilterDefinitionForObject(obj));
+            var result = await _client.DeleteDocumentAsync(UriForDocument(obj));
+            ThrowOnFailure(result.StatusCode);
             IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
-            status.IsSuccess = result.IsAcknowledged;
-            status.StatusInfo = (int)result.DeletedCount;
+            status.IsSuccess = result.StatusCode == HttpStatusCode.OK;
+            status.StatusInfo = status.IsSuccess ? 1 : 0;
             return status;
         }
 
@@ -294,10 +330,11 @@ namespace DataContext.NoSql.MongoDB
         /// <returns>A completion token encapsulating the status indicating the result of the operation</returns>
         public async Task<IStatus<int>> DeleteAsync<T, K>(K key)
         {
-            var result = await GetCollectionForType<T>().DeleteOneAsync(BuildFilterDefinitionForObjectKey<T, K>(key));
+            var result = await _client.DeleteDocumentAsync(UriForDocumentKey<T>(key.ToString()));
+            ThrowOnFailure(result.StatusCode);
             IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
-            status.IsSuccess = result.IsAcknowledged;
-            status.StatusInfo = (int)result.DeletedCount;
+            status.IsSuccess = result.StatusCode == HttpStatusCode.OK;
+            status.StatusInfo = status.IsSuccess ? 1 : 0;
             return status;
         }
 
@@ -310,11 +347,12 @@ namespace DataContext.NoSql.MongoDB
         /// <returns>A status indicating result of the operation</returns>
         public IStatus<int> Insert<T>(T obj)
         {
-            var collection = GetCollectionForType<T>();
-            collection.InsertOne(obj);
+            var task = _client.CreateDocumentAsync(UriForType<T>(), obj);
+            task.RunSynchronously();
+            ThrowOnFailure(task.Result.StatusCode);
             IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
-            status.IsSuccess =true;
-            status.StatusInfo = 1;
+            status.IsSuccess = task.Result.StatusCode == HttpStatusCode.Created;
+            status.StatusInfo = status.IsSuccess ? 1 : 0;
             return status;
         }
 
@@ -327,11 +365,24 @@ namespace DataContext.NoSql.MongoDB
         /// <returns>A status indicating result of the operation</returns>
         public IStatus<int> InsertAll<T>(IList<T> objList)
         {
-            var collection = GetCollectionForType<T>();
-            collection.InsertMany(objList);
+            IList<Task<ResourceResponse<Document>>> tasks = new List<Task<ResourceResponse<Document>>>();
+            Uri uri = UriForType<T>();
+            foreach(T obj in objList)
+            {
+                tasks.Add(_client.CreateDocumentAsync(uri,obj));
+            }
+            Task.WaitAll(tasks.ToArray());
+            int successCount = 0;
+            foreach(var task in tasks)
+            {
+                if(task.Result.StatusCode == HttpStatusCode.Created)
+                {
+                    successCount++;
+                }
+            }
             IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
-            status.IsSuccess = true;
-            status.StatusInfo = objList.Count;
+            status.IsSuccess = successCount == tasks.Count;
+            status.StatusInfo = successCount;
             return status;
         }
 
@@ -344,11 +395,24 @@ namespace DataContext.NoSql.MongoDB
         /// <returns>A completion token encapsulating the status indicating the result of the operation</returns>
         public async Task<IStatus<int>> InsertAllAsync<T>(IList<T> objList)
         {
-            var collection = GetCollectionForType<T>();
-            await collection.InsertManyAsync(objList);
+            IList<Task<ResourceResponse<Document>>> tasks = new List<Task<ResourceResponse<Document>>>();
+            Uri uri = UriForType<T>();
+            foreach (T obj in objList)
+            {
+                tasks.Add(_client.CreateDocumentAsync(uri, obj));
+            }
+            await Task.WhenAll(tasks.ToArray());
+            int successCount = 0;
+            foreach (var task in tasks)
+            {
+                if (task.Result.StatusCode == HttpStatusCode.Created)
+                {
+                    successCount++;
+                }
+            }
             IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
-            status.IsSuccess = true;
-            status.StatusInfo = objList.Count;
+            status.IsSuccess = successCount == tasks.Count;
+            status.StatusInfo = successCount;
             return status;
         }
 
@@ -360,45 +424,24 @@ namespace DataContext.NoSql.MongoDB
         /// <param name="obj">Instance of type T to be added</param>
         /// <returns>A completion token encapsulating the status indicating the result of the operation</returns>
         public async Task<IStatus<int>> InsertAsync<T>(T obj)
-        {
-            var collection = GetCollectionForType<T>();
-            await collection.InsertOneAsync(obj);
+        { 
+            var result = await _client.CreateDocumentAsync(UriForType<T>(), obj);
+            ThrowOnFailure(result.StatusCode);
             IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
-            status.IsSuccess = true;
-            status.StatusInfo = 1;
+            status.IsSuccess = result.StatusCode == HttpStatusCode.Created;
+            status.StatusInfo = status.IsSuccess ? 1 : 0;
             return status;
+
         }
 
-
-        /// <summary>
-        /// Executes a data modification statement against the data source
-        /// </summary>
-        /// <param name="statement">Data modification statement</param>
-        /// <param name="parameters">Statement parameter mapping</param>
-        /// <returns>A status indicating the result of the operation</returns>
         public IStatus<int> NonQuery(string statement, IDictionary<string, object> parameters)
         {
-            var result = _client.GetDatabase(DBName).RunCommand(BuildCommandObject(statement, parameters));
-            IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
-            status.IsSuccess = true;
-            status.StatusInfo = 0;
-            return status;
+            throw new NotImplementedException();
         }
 
-
-        /// <summary>
-        /// Executes a data modification statement against the data source asynchronously
-        /// </summary>
-        /// <param name="statement">Data modification statement</param>
-        /// <param name="parameters">Statement parameter mapping</param>
-        /// <returns>A completion token encapsulating status indicating the result of the operation</returns>
-        public async Task<IStatus<int>> NonQueryAsync(string statement, IDictionary<string, object> parameters)
+        public Task<IStatus<int>> NonQueryAsync(string statement, IDictionary<string, object> parameters)
         {
-            var result = await _client.GetDatabase(DBName).RunCommandAsync(BuildCommandObject(statement, parameters));
-            IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
-            status.IsSuccess = true;
-            status.StatusInfo = 0;
-            return status;
+            throw new NotImplementedException();
         }
 
 
@@ -411,27 +454,14 @@ namespace DataContext.NoSql.MongoDB
         /// <returns>Matching instances of T</returns>
         public IEnumerable<T> Query<T>(string query, IDictionary<string, object> parameters)
         {
-            var result = _client.GetDatabase(DBName).RunCommand(BuildCommandObject(query, parameters));
-            foreach(var item in result.AsBsonArray)
-            {
-                yield return BsonSerializer.Deserialize<T>(item.AsBsonDocument);
-            }
+            var sqlParams = ConvertParameters(parameters);
+            return _client.CreateDocumentQuery<T>(UriForType<T>(), new SqlQuerySpec()
+            { QueryText = query, Parameters = sqlParams });
         }
 
-
-        /// <summary>
-        /// Runs a data retrieval statement directly against the data source for one or more arbitrary record types
-        /// </summary>
-        /// <param name="query">Data retrieval statement</param>
-        /// <param name="parameters">Statement parameter mapping</param>
-        /// <returns>Query results with each record's fields encoded as a series of key-value pairs</returns>
         public IEnumerable<IDictionary<string, object>> Query(string query, IDictionary<string, object> parameters)
         {
-            var result = _client.GetDatabase(DBName).RunCommand(BuildCommandObject(query, parameters));
-            foreach (var item in result.AsBsonArray)
-            {
-                yield return item.AsBsonDocument.ToDictionary();
-            }
+            throw new NotImplementedException();
         }
 
 
@@ -447,29 +477,14 @@ namespace DataContext.NoSql.MongoDB
             return Task.FromResult(Query<T>(query, parameters));
         }
 
-
-        /// <summary>
-        /// Runs a data retrieval statement directly against the data source for one or more arbitrary record types asynchronously
-        /// </summary>
-        /// <param name="query">Data retrieval statement</param>
-        /// <param name="parameters">Statement parameter mapping</param>
-        /// <returns>A completion token encapsulating the query results with each record's fields encoded as a series of key-value pairs</returns>
         public Task<IEnumerable<IDictionary<string, object>>> QueryAsync(string query, IDictionary<string, object> parameters)
         {
-            return Task.FromResult(Query(query, parameters));
+            throw new NotImplementedException();
         }
 
-
-        /// <summary>
-        /// Reverts uncommitted data transactions if applicable
-        /// </summary>
         public void RollBack()
         {
-            if(!AutoCommit)
-            {
-                _transSession.AbortTransaction();
-                _transSession = _client.StartSession();
-            }
+            throw new NotImplementedException();
         }
 
 
@@ -480,10 +495,8 @@ namespace DataContext.NoSql.MongoDB
         /// <returns>An iterator for traversing the returned records</returns>
         public IEnumerable<T> SelectAll<T>()
         {
-            var collection = GetCollectionForType<T>();
-            return collection.AsQueryable();
+            return _client.CreateDocumentQuery<T>(UriForType<T>());
         }
-
 
         /// <summary>
         /// Retrieves all instances of T from the data source asynchronously
@@ -495,7 +508,6 @@ namespace DataContext.NoSql.MongoDB
             return Task.FromResult(SelectAll<T>());
         }
 
-
         /// <summary>
         /// Retrieves all instances of T matching the specified expression
         /// </summary>
@@ -504,9 +516,8 @@ namespace DataContext.NoSql.MongoDB
         /// <returns>Matching instances of T</returns>
         public IEnumerable<T> SelectMatching<T>(Expression<Func<T, bool>> matcher)
         {
-            return (from x in SelectAll<T>() where matcher.Compile()(x) select x);
+            return (from record in SelectAll<T>() where matcher.Compile()(record) select record);
         }
-
 
         /// <summary>
         /// Retrieves all instances of T matching the specified expression asynchronously
@@ -519,7 +530,6 @@ namespace DataContext.NoSql.MongoDB
             return Task.FromResult(SelectMatching(matcher));
         }
 
-
         /// <summary>
         /// Retrieves a single instance of T based on the specified key
         /// </summary>
@@ -529,7 +539,9 @@ namespace DataContext.NoSql.MongoDB
         /// <returns>The record matching the key</returns>
         public T SelectOne<T, K>(K key)
         {
-            return (from x in SelectAll<T>() where Mapper.GetKeyValue(x).ToString().Equals(key.ToString()) select x).First();
+            var task = _client.ReadDocumentAsync<T>(UriForDocumentKey<T>(key.ToString()));
+            task.RunSynchronously();
+            return task.Result;
         }
 
 
@@ -542,7 +554,7 @@ namespace DataContext.NoSql.MongoDB
         /// <returns>A completion token encapsulating the record matching the key</returns>
         public Task<T> SelectOneAsync<T, K>(K key)
         {
-            return Task.FromResult(SelectOne<T,K>(key));
+            return Task.FromResult(SelectOne<T, K>(key));
         }
 
 
@@ -555,7 +567,7 @@ namespace DataContext.NoSql.MongoDB
         /// <returns>Instances of T within the data page</returns>
         public IEnumerable<T> SelectRange<T>(int from, int length)
         {
-            return SelectAll<T>().Skip(from).Take(length);
+            return (from record in SelectAll<T>() select record).Skip(from).Take(length);
         }
 
 
@@ -581,17 +593,25 @@ namespace DataContext.NoSql.MongoDB
         /// <returns>A status indicating result of the operation</returns>
         public IStatus<int> Update<T>(T obj, bool updateNulls = false)
         {
-            var collection = GetCollectionForType<T>();
-            string keyString = Mapper.GetKeyValue(obj).ToString();
-            T record = SelectOne<T,string>(keyString);
-            Util.DeepCopy(obj, record, !updateNulls, Mapper.GetKeyName(typeof(T)));
-            var result = collection.ReplaceOne(BuildFilterDefinitionForObjectKey<T, string>(keyString), record);
+            T oldRecord = SelectOne<T, object>(Mapper.GetKeyValue(obj));
             IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
-            status.IsSuccess = result.IsAcknowledged;
-            status.StatusInfo = (int)result.ModifiedCount;
+            string keyName = Mapper.GetKeyName(obj.GetType());
+            if(oldRecord != null)
+            {
+                Util.DeepCopy(obj, oldRecord, !updateNulls, keyName);
+                var task = _client.ReplaceDocumentAsync(UriForDocument(oldRecord), oldRecord);
+                task.RunSynchronously();
+                status.IsSuccess = task.Result.StatusCode == HttpStatusCode.OK;
+                status.StatusInfo = status.IsSuccess ? 1 : 0;
+            }
+            else
+            {
+                status.IsSuccess = false;
+                status.StatusInfo = 0;
+                status.StatusMessage = "Matching record not found!";
+            }
             return status;
         }
-
 
         /// <summary>
         /// Updates multiple records the data source matching the instances of T
@@ -602,37 +622,44 @@ namespace DataContext.NoSql.MongoDB
         /// <returns>A status indicating result of the operation</returns>
         public IStatus<int> UpdateAll<T>(IList<T> objList, bool updateNulls = false)
         {
-            var collection = GetCollectionForType<T>();
+ 
             IList<string> keyList = new List<string>(objList.Count);
 
             foreach (T obj in objList)
             {
                 keyList.Add(Mapper.GetKeyValue(obj).ToString());
             }
+
+            IEnumerable<T> records = SelectMatching<T>(x => keyList.Contains(Mapper.GetKeyValue(x).ToString()));
             IDictionary<string, T> recordMap = new Dictionary<string, T>();
-            IEnumerable<T> records = SelectMatching<T>( x => keyList.Contains(Mapper.GetKeyValue(x).ToString()));
             foreach(var rec in records)
             {
                 recordMap.Add(Mapper.GetKeyValue(rec).ToString(), rec);
             }
             string keyName = Mapper.GetKeyName(typeof(T));
-            int updateCount = 0;
-            for(int i =0; i < keyList.Count;i++)
+          
+            IList<Task<ResourceResponse<Document>>> updTasks = new List<Task<ResourceResponse<Document>>>();
+
+            for (int i = 0; i < keyList.Count; i++)
             {
                 Util.DeepCopy(objList[i], recordMap[keyList[i]], !updateNulls, keyName);
-                var result = collection.ReplaceOne(BuildFilterDefinitionForObjectKey<T, string>(keyList[i]), recordMap[keyList[i]] );
-                if(result.IsAcknowledged)
+                updTasks.Add(_client.ReplaceDocumentAsync(UriForDocument(recordMap[keyList[i]]), recordMap[keyList[i]]));    
+            }
+            Task.WaitAll(updTasks.ToArray());
+
+            int successCount = 0;
+            foreach (var task in updTasks)
+            {
+                if (task.Result.StatusCode == HttpStatusCode.Created)
                 {
-                    updateCount++;
+                    successCount++;
                 }
             }
-           
             IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
-            status.IsSuccess = updateCount == keyList.Count;
-            status.StatusInfo = updateCount;
+            status.IsSuccess = successCount == updTasks.Count;
+            status.StatusInfo = successCount;
             return status;
         }
-
 
         /// <summary>
         /// Updates multiple records the data source matching the instances of T asynchronously
@@ -643,34 +670,40 @@ namespace DataContext.NoSql.MongoDB
         /// <returns>A completion token encapsulating the status indicating the result of the operation</returns>
         public async Task<IStatus<int>> UpdateAllAsync<T>(IList<T> objList, bool updateNulls = false)
         {
-            var collection = GetCollectionForType<T>();
             IList<string> keyList = new List<string>(objList.Count);
 
             foreach (T obj in objList)
             {
                 keyList.Add(Mapper.GetKeyValue(obj).ToString());
             }
-            IDictionary<string, T> recordMap = new Dictionary<string, T>();
+
             IEnumerable<T> records = await SelectMatchingAsync<T>(x => keyList.Contains(Mapper.GetKeyValue(x).ToString()));
-            foreach(var rec in records)
+            IDictionary<string, T> recordMap = new Dictionary<string, T>();
+            foreach (var rec in records)
             {
                 recordMap.Add(Mapper.GetKeyValue(rec).ToString(), rec);
             }
             string keyName = Mapper.GetKeyName(typeof(T));
-            int updateCount = 0;
+
+            int successCount = 0;
+            IList<Task<ResourceResponse<Document>>> updTasks = new List<Task<ResourceResponse<Document>>>();
             for (int i = 0; i < keyList.Count; i++)
             {
                 Util.DeepCopy(objList[i], recordMap[keyList[i]], !updateNulls, keyName);
-                var result =await  collection.ReplaceOneAsync(BuildFilterDefinitionForObjectKey<T, string>(keyList[i]), recordMap[keyList[i]]);
-                if (result.IsAcknowledged)
+                updTasks.Add(_client.ReplaceDocumentAsync(UriForDocument(recordMap[keyList[i]]), recordMap[keyList[i]]));
+            }
+            await Task.WhenAll(updTasks.ToArray());
+
+            foreach (var task in updTasks)
+            {
+                if (task.Result.StatusCode == HttpStatusCode.Created)
                 {
-                    updateCount++;
+                    successCount++;
                 }
             }
-
             IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
-            status.IsSuccess = updateCount == keyList.Count;
-            status.StatusInfo = updateCount;
+            status.IsSuccess = successCount == updTasks.Count;
+            status.StatusInfo = successCount;
             return status;
         }
 
@@ -684,14 +717,22 @@ namespace DataContext.NoSql.MongoDB
         /// <returns>A completion token encapsulating the status indicating the result of the operation</returns>
         public async Task<IStatus<int>> UpdateAsync<T>(T obj, bool updateNulls = false)
         {
-            var collection = GetCollectionForType<T>();
-            string keyString = Mapper.GetKeyValue(obj).ToString();
-            T record = await SelectOneAsync<T, string>(keyString);
-            Util.DeepCopy(obj, record, !updateNulls, Mapper.GetKeyName(typeof(T)));
-            var result = await collection.ReplaceOneAsync(BuildFilterDefinitionForObjectKey<T, string>(keyString), record);
+            T oldRecord = SelectOne<T, object>(Mapper.GetKeyValue(obj));
             IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
-            status.IsSuccess = result.IsAcknowledged;
-            status.StatusInfo = (int)result.ModifiedCount;
+            string keyName = Mapper.GetKeyName(obj.GetType());
+            if (oldRecord != null)
+            {
+                Util.DeepCopy(obj, oldRecord, !updateNulls, keyName);
+                var result = await _client.ReplaceDocumentAsync(UriForDocument(oldRecord), oldRecord);
+                status.IsSuccess = result.StatusCode == HttpStatusCode.OK;
+                status.StatusInfo = status.IsSuccess ? 1 : 0;
+            }
+            else
+            {
+                status.IsSuccess = false;
+                status.StatusInfo = 0;
+                status.StatusMessage = "Matching record not found!";
+            }
             return status;
         }
 
@@ -715,7 +756,7 @@ namespace DataContext.NoSql.MongoDB
         }
 
         // TODO: override a finalizer only if Dispose(bool disposing) above has code to free unmanaged resources.
-        // ~MongoDBDataContext() {
+        // ~DocumentDBDataContext() {
         //   // Do not change this code. Put cleanup code in Dispose(bool disposing) above.
         //   Dispose(false);
         // }

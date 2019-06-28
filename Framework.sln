@@ -15,7 +15,9 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DataContext.Relational", "D
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Logger.MSImpl", "Logger.MSImpl\Logger.MSImpl.csproj", "{18A0BBAF-7221-4B4F-BE06-6A0AE2B41911}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DataContext.NoSql.MongoDB", "DataContext.NoSql.MongoDB\DataContext.NoSql.MongoDB.csproj", "{AB0B8EA1-14B0-4C7A-AB7B-B14E08793D51}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DataContext.NoSql.MongoDB", "DataContext.NoSql.MongoDB\DataContext.NoSql.MongoDB.csproj", "{AB0B8EA1-14B0-4C7A-AB7B-B14E08793D51}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DataContext.NoSql.DocumentDB", "DataContext.NoSql.DocumentDB\DataContext.NoSql.DocumentDB.csproj", "{9129F3DA-EFC6-42EB-A8A1-C2562030F973}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -51,6 +53,10 @@ Global
 		{AB0B8EA1-14B0-4C7A-AB7B-B14E08793D51}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{AB0B8EA1-14B0-4C7A-AB7B-B14E08793D51}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{AB0B8EA1-14B0-4C7A-AB7B-B14E08793D51}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9129F3DA-EFC6-42EB-A8A1-C2562030F973}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9129F3DA-EFC6-42EB-A8A1-C2562030F973}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9129F3DA-EFC6-42EB-A8A1-C2562030F973}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9129F3DA-EFC6-42EB-A8A1-C2562030F973}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
