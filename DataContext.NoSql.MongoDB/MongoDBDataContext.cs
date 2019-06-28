@@ -609,13 +609,18 @@ namespace DataContext.NoSql.MongoDB
             {
                 keyList.Add(Mapper.GetKeyValue(obj).ToString());
             }
-            IList<T> records = SelectMatching<T>( x => keyList.Contains(Mapper.GetKeyValue(x).ToString())).ToList();
+            IDictionary<string, T> recordMap = new Dictionary<string, T>();
+            IEnumerable<T> records = SelectMatching<T>( x => keyList.Contains(Mapper.GetKeyValue(x).ToString()));
+            foreach(var rec in records)
+            {
+                recordMap.Add(Mapper.GetKeyValue(rec).ToString(), rec);
+            }
             string keyName = Mapper.GetKeyName(typeof(T));
             int updateCount = 0;
             for(int i =0; i < keyList.Count;i++)
             {
-                Util.DeepCopy(objList[i], records[i], !updateNulls, keyName);
-                var result = collection.ReplaceOne(BuildFilterDefinitionForObjectKey<T, string>(keyList[i]), records[i]);
+                Util.DeepCopy(objList[i], recordMap[keyList[i]], !updateNulls, keyName);
+                var result = collection.ReplaceOne(BuildFilterDefinitionForObjectKey<T, string>(keyList[i]), recordMap[keyList[i]] );
                 if(result.IsAcknowledged)
                 {
                     updateCount++;
@@ -645,13 +650,18 @@ namespace DataContext.NoSql.MongoDB
             {
                 keyList.Add(Mapper.GetKeyValue(obj).ToString());
             }
-            IList<T> records =(await SelectMatchingAsync<T>(x => keyList.Contains(Mapper.GetKeyValue(x).ToString()))).ToList();
+            IDictionary<string, T> recordMap = new Dictionary<string, T>();
+            IEnumerable<T> records = await SelectMatchingAsync<T>(x => keyList.Contains(Mapper.GetKeyValue(x).ToString()));
+            foreach(var rec in records)
+            {
+                recordMap.Add(Mapper.GetKeyValue(rec).ToString(), rec);
+            }
             string keyName = Mapper.GetKeyName(typeof(T));
             int updateCount = 0;
             for (int i = 0; i < keyList.Count; i++)
             {
-                Util.DeepCopy(objList[i], records[i], !updateNulls, keyName);
-                var result =await  collection.ReplaceOneAsync(BuildFilterDefinitionForObjectKey<T, string>(keyList[i]), records[i]);
+                Util.DeepCopy(objList[i], recordMap[keyList[i]], !updateNulls, keyName);
+                var result =await  collection.ReplaceOneAsync(BuildFilterDefinitionForObjectKey<T, string>(keyList[i]), recordMap[keyList[i]]);
                 if (result.IsAcknowledged)
                 {
                     updateCount++;
