@@ -1,4 +1,5 @@
-﻿using Framework.Interfaces;
+﻿using Framework.Common.Items;
+using Framework.Interfaces;
 using System;
 using System.Collections.Generic;
 using System.Net;
@@ -38,9 +39,34 @@ namespace Framework.Common.Services
         INetworkNode ConnectedServer { get; }
 
         /// <summary>
+        /// Current node
+        /// </summary>
+        INetworkNode Self { get; }
+
+        /// <summary>
         /// A flag to determine if the service protocol is connection-oriented or connectionless network
         /// </summary>
         bool IsConnectionless { get;  }
+
+        /// <summary>
+        /// Timeout value in ms for connecting to a server
+        /// </summary>
+        int ConnectTimeOut { get; set; }
+
+        /// <summary>
+        /// Timeout value in ms for receiving a client connection request
+        /// </summary>
+        int ListenTimeOut { get; set; }
+
+        /// <summary>
+        /// Timeout value in ms for sending a datagram/message
+        /// </summary>
+        int SendTimeOut { get; set; }
+
+        /// <summary>
+        /// Timout value in ms for receiving a datagram/message
+        /// </summary>
+        int ReceiveTimeOut { get; set; }
 
         /// <summary>
         /// Authenticates clients attempting to connect to this service
@@ -290,24 +316,5 @@ namespace Framework.Common.Services
 
     }
 
-    /// <summary>
-    /// An interface that specifies basic properties of a network node
-    /// </summary>
-    public interface INetworkNode
-    {
-        /// <summary>
-        /// Node network name
-        /// </summary>
-        string Name { get; set; }
-
-        /// <summary>
-        /// Node address on network
-        /// </summary>
-        byte[] Address { get; set; }
-
-        /// <summary>
-        /// A set of ports server is currently listening on
-        /// </summary>
-        HashSet<int> ListeningPort { get; set; }
-    }
+    
 }
