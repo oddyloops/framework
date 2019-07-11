@@ -4,15 +4,26 @@ using System;
 using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Framework.Common.Services
 {
+
+
+    public delegate void ReceivedStreamHandler(object sender, SocketEventArgs e);
+    public delegate void ReceivedDatagramHandler(object sender, DatagramEventArgs e);
+   
     /// <summary>
     /// An interface that specifies the requirements for a networking framework implementation
     /// </summary>
     public interface INetworkService : IService, IDisposable
     {
+        event ReceivedStreamHandler OnReceivedStreamMessage;
+
+        event ReceivedDatagramHandler OnReceivedDatagram;
+
+
         /// <summary>
         /// A reference to a configuration component used to access config settings required by the network service
         /// </summary>
@@ -31,7 +42,7 @@ namespace Framework.Common.Services
         /// <summary>
         /// A collection of all clients connected to the server
         /// </summary>
-        HashSet<INetworkNode> ConnectedClients { get;  }
+        IDictionary<INetworkNode,Thread> ConnectedClients { get;  }
 
         /// <summary>
         /// Server that the current node is connected to
@@ -64,24 +75,18 @@ namespace Framework.Common.Services
         int SendTimeOut { get; set; }
 
         /// <summary>
-        /// Timout value in ms for receiving a datagram/message
+        /// Timeout value in ms for receiving a datagram/message
         /// </summary>
         int ReceiveTimeOut { get; set; }
 
         /// <summary>
-        /// Authenticates clients attempting to connect to this service
+        /// Maximum size of messages in bytes that can be received at once
         /// </summary>
-        /// <param name="credentials">Client credentials</param>
-        /// <returns>A flag indicating the success/failure of authentication</returns>
-        bool Authenticate(NetworkCredential credentials);
+        int ReceiveBufferSize { get; }
 
-        /// <summary>
-        /// Authenticates clients attempting to connect to this service asynchronously
-        /// </summary>
-        /// <param name="credentials">Client credentials</param>
-        /// <returns>A completion token encapsulating the flag indicating success/failure of authentication</returns>
-        Task<bool> AuthenticateAsync(NetworkCredential credentials);
+        
 
+ 
         /// <summary>
         /// Used by clients for connecting to a server in a connection-oriented protocol
         /// </summary>
@@ -98,30 +103,6 @@ namespace Framework.Common.Services
         /// <returns>A status indicating result of the operation</returns>
         IStatus<string> Connect(byte[] address, int port);
 
-        /// <summary>
-        /// Used by clients for securely connecting to a server in a connection-oriented protocol
-        /// </summary>
-        /// <param name="name">Server name</param>
-        /// <param name="port">Port for connection</param>
-        /// <param name="credentials">Client credentials</param>
-        /// <returns>A status indicating result of the operation</returns>
-        IStatus<string> Connect(string name, int port,NetworkCredential credentials);
-
-        /// <summary>
-        /// Used by clients for securely connecting to a server in a connection-oriented protocol
-        /// </summary>
-        /// <param name="address">Server address</param>
-        /// <param name="port">Port for connection</param>
-        /// <param name="credentials">Client credentials</param>
-        /// <returns>A status indicating result of the operation</returns>
-        IStatus<string> Connect(byte[] address, int port, NetworkCredential credentials);
-
-        /// <summary>
-        /// Used by clients to send data over an established connection in a connection-oriented protocol
-        /// </summary>
-        /// <param name="message">Message data</param>
-        /// <returns>A status indicating result of the operation</returns>
-        IStatus<string> Stream(byte[] message);
 
         /// <summary>
         /// Used by nodes to send data over a one-time link in a connectionless protocol
@@ -131,15 +112,7 @@ namespace Framework.Common.Services
         /// <returns>A status indicating result of the operation</returns>
         IStatus<string> SendDatagram(byte[] message, INetworkNode receiver);
 
-        /// <summary>
-        /// Used by nodes to securely send data over a one-time link in a connectionless protocol
-        /// </summary>
-        /// <param name="message">Message data</param>
-        /// <param name="receiver">Recipient node</param>
-        /// <param name="credentials">Sender credentials</param>
-        /// <returns>A status indicating result of the operation</returns>
-        IStatus<string> SendDatagram(byte[] message, INetworkNode receiver, NetworkCredential credentials);
-
+     
         /// <summary>
         /// Used by clients for connecting to a server in a connection-oriented protocol asynchronously
         /// </summary>
@@ -158,24 +131,6 @@ namespace Framework.Common.Services
       
 
         /// <summary>
-        /// Used by clients for securely connecting to a server in a connection-oriented protocol asynchrously
-        /// </summary>
-        /// <param name="name">Server name</param>
-        /// <param name="port">Port for connection</param>
-        /// <param name="credentials">Client credentials</param>
-        /// <returns>A completion token encapsulating the status indicating result of the operation</returns>
-        Task<IStatus<string>> ConnectAsync(string name, int port, NetworkCredential credentials);
-
-        /// <summary>
-        /// Used by clients for securely connecting to a server in a connection-oriented protocol asychronously
-        /// </summary>
-        /// <param name="address">Server address</param>
-        /// <param name="port">Port for connection</param>
-        /// <param name="credentials">Client credentials</param>
-        /// <returns>A completion token encapsulating the status indicating result of the operation</returns>
-        Task<IStatus<string>> ConnectAsync(byte[] address, int port, NetworkCredential credentials);
-
-        /// <summary>
         /// Used by clients to send data over an established connection in a connection-oriented protocol asynchronously
         /// </summary>
         /// <param name="message">Message data</param>
@@ -190,21 +145,13 @@ namespace Framework.Common.Services
         /// <returns>A completion token encapsulating the status indicating result of the operation</returns>
         Task<IStatus<string>> SendDatagramAsync(byte[] message, INetworkNode receiver);
 
-        /// <summary>
-        /// Used by nodes to securely send data over a one-time link in a connectionless protocol asynchronously
-        /// </summary>
-        /// <param name="message">Message data</param>
-        /// <param name="receiver">Recipient node</param>
-        /// <param name="credentials">Sender credentials</param>
-        /// <returns>A completion token encapsulating the status indicating result of the operation</returns>
-        Task<IStatus<string>> SendDatagramAsync(byte[] message, INetworkNode receiver, NetworkCredential credentials);
 
         /// <summary>
         /// Opens a port for receiving incoming connections in a connection-oriented protocol
         /// </summary>
         /// <param name="port">Port number to listen on</param>
         /// <returns>A status indicating result of the operation</returns>
-        IStatus<string> Listen(int port);
+        void Listen(int port);
 
         /// <summary>
         /// Opens a port for receiving a limited amount of incoming connections in a connection-oriented protocol
@@ -212,7 +159,7 @@ namespace Framework.Common.Services
         /// <param name="port">Port number to listen on</param>
         /// <param name="maxConnections">Maximum number of connections allowed</param>
         /// <returns>A status indicating result of the operation</returns>
-        IStatus<string> Listen(int port, int maxConnections);
+        void Listen(int port, int maxConnections);
 
         /// <summary>
         /// Opens a port for receiving incoming connections from a client white-list
@@ -220,14 +167,14 @@ namespace Framework.Common.Services
         /// <param name="port">Port number to listen on</param>
         /// <param name="validClients"></param>
         /// <returns>A status indicating result of the operation</returns>
-        IStatus<string> Listen(int port, IList<INetworkNode> validClients);
+        void Listen(int port, ISet<INetworkNode> validClients);
 
         /// <summary>
         /// Opens a port for receiving incoming connections in a connection-oriented protocol asynchronously
         /// </summary>
         /// <param name="port">Port number to listen on</param>
         /// <returns>A completion token encapsulating the status indicating result of the operation</returns>
-        Task<IStatus<string>> ListenAsync(int port);
+        Task ListenAsync(int port);
 
         /// <summary>
         /// Opens a port for receiving a limited amount of incoming connections in a connection-oriented protocol asynchronously
@@ -235,7 +182,7 @@ namespace Framework.Common.Services
         /// <param name="port">Port number to listen on</param>
         /// <param name="maxConnections">Maximum number of connections allowed</param>
         /// <returns>A completion token encapsulating the status indicating result of the operation</returns>
-        Task<IStatus<string>> ListenAsync(int port, int maxConnections);
+        Task ListenAsync(int port, int maxConnections);
 
         /// <summary>
         /// Opens a port for receiving incoming connections from a client white-list asynchronously
@@ -243,23 +190,11 @@ namespace Framework.Common.Services
         /// <param name="port">Port number to listen on</param>
         /// <param name="validClients"></param>
         /// <returns>A completion token encapsulating the status indicating result of the operation</returns>
-        Task<IStatus<string>> ListenAsync(int port, IList<INetworkNode> validClients);
+        Task ListenAsync(int port, ISet<INetworkNode> validClients);
 
-        /// <summary>
-        /// Waits for incoming message on a network data stream in a connection-oriented protocol
-        /// </summary>
-        /// <param name="client">Client node at the other end of the stream</param>
-        /// <returns>Received message</returns>
-        byte[] ReceiveStream(INetworkNode client);
+        
 
-        /// <summary>
-        /// A non-blocking attempt to read off available messages in an established network data stream for connection-oriented
-        /// protocols
-        /// </summary>
-        /// <param name="client">Client node at the other end of the stream</param>
-        /// <param name="messageReceived">An output parameter that contains read message if any</param>
-        /// <returns>A flag indicating success/failure of the operation</returns>
-        bool TryReceiveStream(INetworkNode client, out byte[] messageReceived);
+       
 
         /// <summary>
         /// Waits for incoming message from any sender in a connectionless protocol
@@ -274,21 +209,7 @@ namespace Framework.Common.Services
         /// <returns>>A flag indicating success/failure of the operation</returns>
         bool TryReceiveDatagram(out byte[] messageReceived);
 
-        /// <summary>
-        /// Waits for incoming message on a network data stream in a connection-oriented protocol asynchronously
-        /// </summary>
-        /// <param name="client">Client node at the other end of the stream</param>
-        /// <returns>A completion token encapsulating the received message</returns>
-        Task<byte[]> ReceiveStreamAsync(INetworkNode client);
-
-        /// <summary>
-        /// A non-blocking attempt to read off available messages in an established network data stream for connection-oriented
-        /// protocols asynchronously
-        /// </summary>
-        /// <param name="client">Client node at the other end of the stream</param>
-        /// <param name="messageReceived">An output parameter that contains read message if any</param>
-        /// <returns>A completion token encapsulating the flag indicating success/failure of the operation</returns>
-        Task<bool> TryReceiveStreamAsync(INetworkNode client, out byte[] messageReceived);
+       
 
         /// <summary>
         /// Waits for incoming message from any sender in a connectionless protocol asynchrobously

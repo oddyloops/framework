@@ -10,15 +10,53 @@ using System.Threading.Tasks;
 using Framework.Common.Items;
 using Framework.Utils;
 using System.Threading;
+using System.Security;
 
 namespace Framework.Common.Impl.Services
 {
     [Export(typeof(INetworkService))]
     public class NetworkService : INetworkService
     {
-        private HashSet<INetworkNode> _connectedClients;
-        private INetworkNode _connectedServer;
-        private INetworkNode _self;
+        
+        private Thread _clientListeningThread;
+
+        #region Helpers
+        private void MessageListenerAction(object threadArgs)
+        {
+            INetworkNode senderNode = (INetworkNode)threadArgs;
+            Socket socket = senderNode.Socket;
+            socket.ReceiveBufferSize = ReceiveBufferSize;
+            if (ReceiveTimeOut > 0)
+            {
+                socket.ReceiveTimeout = ReceiveTimeOut;
+            }
+
+            while (true)
+            {
+                byte[] buffer = new byte[socket.ReceiveBufferSize];
+                int received = socket.Receive(buffer);
+                if (received > 0)
+                {
+                    if (OnReceivedStreamMessage != null)
+                    {
+                        SocketEventArgs args = new SocketEventArgs(buffer, senderNode);
+                        OnReceivedStreamMessage(socket, args);
+                    }
+                }
+                else
+                {
+                    //timed out
+                    socket.Disconnect(false);
+                    break;
+                }
+            }
+        }
+        #endregion
+
+        public event ReceivedStreamHandler OnReceivedStreamMessage;
+
+        public event ReceivedDatagramHandler OnReceivedDatagram;
+
 
         [Import("JsonConfig")]
         public IConfiguration Config { get; set; }
@@ -27,11 +65,11 @@ namespace Framework.Common.Impl.Services
 
         public ProtocolType Protocol { get; set; }
 
-        public HashSet<INetworkNode> ConnectedClients { get => _connectedClients; }
+        public IDictionary<INetworkNode, Thread> ConnectedClients { get; }
 
-        public INetworkNode ConnectedServer { get => _connectedServer; }
+        public INetworkNode ConnectedServer { get; private set; }
 
-        public INetworkNode Self { get => _self; }
+        public INetworkNode Self { get; }
 
         public bool IsConnectionless { get; set; }
 
@@ -55,27 +93,29 @@ namespace Framework.Common.Impl.Services
         /// </summary>
         public int ReceiveTimeOut { get; set; }
 
+        /// <summary>
+        /// Maximum size of messages in bytes that can be received at once
+        /// </summary>
+        public int ReceiveBufferSize { get; private set; } = 8192;
+   
         public NetworkService()
         {
-            _self = Util.Container.CreateInstance<INetworkNode>();
-            _self.Name = Dns.GetHostName();
-
-            IPAddress address = (from addy in Dns.GetHostAddresses(_self.Name)
+            ConnectedClients = new Dictionary<INetworkNode, Thread>();
+            Self = Util.Container.CreateInstance<INetworkNode>();
+            Self.Name = Dns.GetHostName();
+            
+            IPAddress address = (from addy in Dns.GetHostAddresses(Self.Name)
                                  where addy.AddressFamily == AddressScheme
                                  select addy).First();
-            _self.Address = address.GetAddressBytes();
+            Self.Address = address.GetAddressBytes();
+            string receiveSizeStr = Config.GetValue(ConfigConstants.RECEIVE_BUFFER_SIZE);
+            if(receiveSizeStr != null)
+            {
+                ReceiveBufferSize = Convert.ToInt32(receiveSizeStr);
+            }
+
         }
 
-        public bool Authenticate(NetworkCredential credentials)
-        {
-
-            throw new NotImplementedException();
-        }
-
-        public Task<bool> AuthenticateAsync(NetworkCredential credentials)
-        {
-            throw new NotImplementedException();
-        }
 
         public IStatus<string> Connect(string name, int port)
         {
@@ -90,6 +130,7 @@ namespace Framework.Common.Impl.Services
 
             IPAddress endpoint = new IPAddress(address);
             Socket client = new Socket(AddressScheme, SocketType.Stream, Protocol);
+            
             if (ConnectTimeOut <= 0)
             {
                 client.Connect(endpoint, port);
@@ -107,9 +148,12 @@ namespace Framework.Common.Impl.Services
             IStatus<string> status = Util.Container.CreateInstance<IStatus<string>>();
             if (client.Connected)
             {
-                _connectedServer = Util.Container.CreateInstance<INetworkNode>();
-                _connectedServer.Address = address;
-                _connectedServer.Socket = client;
+                ConnectedServer = Util.Container.CreateInstance<INetworkNode>();
+                ConnectedServer.Address = address;
+                ConnectedServer.Socket = client;
+               
+                _clientListeningThread = new Thread(new ParameterizedThreadStart(MessageListenerAction));
+                _clientListeningThread.Start(ConnectedServer);
                 status.IsSuccess = true;
                 status.StatusMessage = "Connection Successful";
             }
@@ -123,15 +167,7 @@ namespace Framework.Common.Impl.Services
             return status;
         }
 
-        public IStatus<string> Connect(string name, int port, NetworkCredential credentials)
-        {
-            throw new NotImplementedException();
-        }
-
-        public IStatus<string> Connect(byte[] address, int port, NetworkCredential credentials)
-        {
-            throw new NotImplementedException();
-        }
+        
 
         public async Task<IStatus<string>> ConnectAsync(string name, int port)
         {
@@ -145,6 +181,7 @@ namespace Framework.Common.Impl.Services
         {
             IPAddress endpoint = new IPAddress(address);
             Socket client = new Socket(AddressScheme, SocketType.Stream, Protocol);
+            
             if (ConnectTimeOut <= 0)
             {
                 await client.ConnectAsync(endpoint, port);
@@ -165,9 +202,11 @@ namespace Framework.Common.Impl.Services
             IStatus<string> status = Util.Container.CreateInstance<IStatus<string>>();
             if (client.Connected)
             {
-                _connectedServer = Util.Container.CreateInstance<INetworkNode>();
-                _connectedServer.Address = address;
-                _connectedServer.Socket = client;
+                ConnectedServer = Util.Container.CreateInstance<INetworkNode>();
+                ConnectedServer.Address = address;
+                ConnectedServer.Socket = client;
+                _clientListeningThread = new Thread(new ParameterizedThreadStart(MessageListenerAction));
+                _clientListeningThread.Start(ConnectedServer);
                 status.IsSuccess = true;
                 status.StatusMessage = "Connection Successful";
             }
@@ -181,81 +220,161 @@ namespace Framework.Common.Impl.Services
             return status;
         }
 
-        public Task<IStatus<string>> ConnectAsync(string name, int port, NetworkCredential credentials)
-        {
-            throw new NotImplementedException();
-        }
-
-        public Task<IStatus<string>> ConnectAsync(byte[] address, int port, NetworkCredential credentials)
-        {
-            throw new NotImplementedException();
-        }
+    
 
         public void Disconnect()
         {
-            if (_connectedClients != null)
+            if (ConnectedClients != null)
             {
-                foreach (var client in _connectedClients)
+                foreach (var client in ConnectedClients)
                 {
-                    if (client.Socket != null && client.Socket.Connected)
+                    if (client.Key.Socket != null && client.Key.Socket.Connected)
                     {
-                        client.Socket.Disconnect(false);
+                        client.Key.Socket.Disconnect(false);
+                        client.Value.Abort(); //close receiving thread
                     }
                 }
-                _connectedClients.Clear();
+                ConnectedClients.Clear();
+            }
+
+            if(ConnectedServer!= null)
+            {
+                ConnectedServer.Socket.Disconnect(false);
+                if(_clientListeningThread != null && _clientListeningThread.ThreadState != ThreadState.Stopped)
+                {
+                    _clientListeningThread.Abort();
+                }
+                
             }
         }
 
         public void DisconnectNode(INetworkNode client)
         {
-            if (_connectedClients.Contains(client))
+            if (ConnectedClients.ContainsKey(client))
             {
                 if (client.Socket != null && client.Socket.Connected)
                 {
                     client.Socket.Disconnect(false);
+                    ConnectedClients[client].Abort();
                 }
-                _connectedClients.Remove(client);
+                ConnectedClients.Remove(client);
             }
         }
 
-        public IStatus<string> Listen(int port)
+        public void Listen(int port)
         {
-            return Listen(port, int.MaxValue);
+            Listen(port, int.MaxValue);
         }
 
-        public IStatus<string> Listen(int port, int maxConnections)
+        public void Listen(int port, int maxConnections)
         {
-            if (_self.Socket == null)
+            if (Self.Socket == null)
             {
-                _self.Socket = new Socket(AddressScheme, SocketType.Stream, Protocol);
+                Self.Socket = new Socket(AddressScheme, SocketType.Stream, Protocol);
             }
-            IPAddress selfAdd = new IPAddress(_self.Address);
-            _self.Socket.Bind(new IPEndPoint(selfAdd, port));
-
-            if(ListenTimeOut <= 0)
+            IPAddress selfAdd = new IPAddress(Self.Address);
+            Self.Socket.Bind(new IPEndPoint(selfAdd, port));
+            Self.Socket.Listen(maxConnections);
+            while (true)
             {
-                _self.Socket.Listen(maxConnections);
+                Socket newConn = null;
+                if (ListenTimeOut <= 0)
+                {
+                    newConn = Self.Socket.Accept();
+                }
+                else
+                {
+                    Thread listenerThread = new Thread(() => newConn = Self.Socket.Accept());
+                    listenerThread.Start();
+                    listenerThread.Join(ListenTimeOut);
+                    if (listenerThread.ThreadState != ThreadState.Stopped)
+                    {
+                        listenerThread.Abort();
+                    }
+                }
+                if(newConn == null)
+                {
+                    break; //timed out
+                }
+                INetworkNode client = Util.Container.CreateInstance<INetworkNode>();
+                client.Address = (newConn.RemoteEndPoint as IPEndPoint).Address.GetAddressBytes();
+                client.Socket = newConn;
+                Thread receiverThread = new Thread(new ParameterizedThreadStart(MessageListenerAction));
+                receiverThread.Start(client);
+                ConnectedClients.Add(client, receiverThread);
+            }
+
+         
+
+        }
+
+        public void Listen(int port, ISet<INetworkNode> validClients)
+        {
+            if (Self.Socket == null)
+            {
+                Self.Socket = new Socket(AddressScheme, SocketType.Stream, Protocol);
+            }
+            IPAddress selfAdd = new IPAddress(Self.Address);
+            Self.Socket.Bind(new IPEndPoint(selfAdd, port));
+            Self.Socket.Listen(int.MaxValue);
+            while (true)
+            {
+                Socket newConn = null;
+                if (ListenTimeOut <= 0)
+                {
+                    newConn = Self.Socket.Accept();
+                }
+                else
+                {
+                    Thread listenerThread = new Thread(() => newConn = Self.Socket.Accept());
+                    listenerThread.Start();
+                    listenerThread.Join(ListenTimeOut);
+                    if (listenerThread.ThreadState != ThreadState.Stopped)
+                    {
+                        listenerThread.Abort();
+                    }
+                }
+                if (newConn == null)
+                {
+                    break; //timed out
+                }
+                else
+                {
+                    INetworkNode client = Util.Container.CreateInstance<INetworkNode>();
+                    client.Address = (newConn.RemoteEndPoint as IPEndPoint).Address.GetAddressBytes();
+                    client.Socket = newConn;
+                    //check if it is a valid client
+                    if (validClients.Contains(client))
+                    {
+                        Thread receiverThread = new Thread(new ParameterizedThreadStart(MessageListenerAction));
+                        receiverThread.Start(client);
+                        ConnectedClients.Add(client, receiverThread);
+                    }
+                    else
+                    {
+                        //disconnect and raise an exception
+                        newConn.Disconnect(false);
+                        throw new SecurityException($"An unauthorized address: {(newConn.RemoteEndPoint as IPEndPoint).Address} tried to connect to server");
+                    }
+                }
             }
         }
 
-        public IStatus<string> Listen(int port, IList<INetworkNode> validClients)
+        public async Task ListenAsync(int port)
         {
-            throw new NotImplementedException();
+            await ListenAsync(port, int.MaxValue);
         }
 
-        public Task<IStatus<string>> ListenAsync(int port)
+        public Task ListenAsync(int port, int maxConnections)
         {
-            throw new NotImplementedException();
+            Listen(port, maxConnections);
+            return Task.FromResult(0);
         }
 
-        public Task<IStatus<string>> ListenAsync(int port, int maxConnections)
+        public Task ListenAsync(int port, ISet<INetworkNode> validClients)
         {
-            throw new NotImplementedException();
-        }
-
-        public Task<IStatus<string>> ListenAsync(int port, IList<INetworkNode> validClients)
-        {
-            throw new NotImplementedException();
+            Listen(port, validClients);
+            return Task.FromResult(0);
         }
 
         public byte[] ReceiveDatagram()
@@ -268,36 +387,21 @@ namespace Framework.Common.Impl.Services
             throw new NotImplementedException();
         }
 
-        public byte[] ReceiveStream(INetworkNode client)
-        {
-            throw new NotImplementedException();
-        }
-
-        public Task<byte[]> ReceiveStreamAsync(INetworkNode client)
-        {
-            throw new NotImplementedException();
-        }
+      
 
         public IStatus<string> SendDatagram(byte[] message, INetworkNode receiver)
         {
             throw new NotImplementedException();
         }
 
-        public IStatus<string> SendDatagram(byte[] message, INetworkNode receiver, NetworkCredential credentials)
-        {
-            throw new NotImplementedException();
-        }
+      
 
         public Task<IStatus<string>> SendDatagramAsync(byte[] message, INetworkNode receiver)
         {
             throw new NotImplementedException();
         }
 
-        public Task<IStatus<string>> SendDatagramAsync(byte[] message, INetworkNode receiver, NetworkCredential credentials)
-        {
-            throw new NotImplementedException();
-        }
-
+      
         public IStatus<string> Stream(byte[] message)
         {
             throw new NotImplementedException();
@@ -318,16 +422,7 @@ namespace Framework.Common.Impl.Services
             throw new NotImplementedException();
         }
 
-        public bool TryReceiveStream(INetworkNode client, out byte[] messageReceived)
-        {
-            throw new NotImplementedException();
-        }
-
-        public Task<bool> TryReceiveStreamAsync(INetworkNode client, out byte[] messageReceived)
-        {
-            throw new NotImplementedException();
-        }
-
+      
         #region IDisposable Support
         private bool disposedValue = false; // To detect redundant calls
 

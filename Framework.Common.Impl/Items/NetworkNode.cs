@@ -29,15 +29,15 @@ namespace Framework.Common.Impl.Items
 
         public override int GetHashCode()
         {
-            int nameHash = Name.GetHashCode();
+            int hash = 0;
             if(Address != null)
             {
                 foreach(byte b in Address)
                 {
-                    nameHash ^= b;
+                    hash ^= b;
                 }
             }
-            return nameHash;
+            return hash;
         }
     }
 }

@@ -54,6 +54,11 @@
         /// Used as the email sender alias when sending an email recovery message
         /// </summary>
         internal const string RECOVERY_SENDER_ALIAS = "RECOVERY_SENDER_ALIAS";
+
+        /// <summary>
+        /// Maximum size in bytes of socket data that can be received at once
+        /// </summary>
+        internal const string RECEIVE_BUFFER_SIZE = "RECEIVE_BUFFER_SIZE";
     }
 
 
