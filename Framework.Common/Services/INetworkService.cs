@@ -12,7 +12,6 @@ namespace Framework.Common.Services
 
 
     public delegate void ReceivedStreamHandler(object sender, SocketEventArgs e);
-    public delegate void ReceivedDatagramHandler(object sender, DatagramEventArgs e);
    
     /// <summary>
     /// An interface that specifies the requirements for a networking framework implementation
@@ -20,8 +19,6 @@ namespace Framework.Common.Services
     public interface INetworkService : IService, IDisposable
     {
         event ReceivedStreamHandler OnReceivedStreamMessage;
-
-        event ReceivedDatagramHandler OnReceivedDatagram;
 
 
         /// <summary>
@@ -103,6 +100,13 @@ namespace Framework.Common.Services
         /// <returns>A status indicating result of the operation</returns>
         IStatus<string> Connect(byte[] address, int port);
 
+        /// <summary>
+        /// Used by clients to send data over an established connection in a connection-oriented protocol
+        /// </summary>
+        /// <param name="message">Message data</param>
+        /// <param name="receiver">Connected receiver of message</param>
+        /// <returns>A status indicating result of the operation</returns>
+        IStatus<string> Stream(byte[] message, INetworkNode receiver);
 
         /// <summary>
         /// Used by nodes to send data over a one-time link in a connectionless protocol
@@ -134,8 +138,9 @@ namespace Framework.Common.Services
         /// Used by clients to send data over an established connection in a connection-oriented protocol asynchronously
         /// </summary>
         /// <param name="message">Message data</param>
+        /// <param name="receiver">Connected receiver of message</param>
         /// <returns>A completion token encapsulating the status indicating result of the operation</returns>
-        Task<IStatus<string>> StreamAsync(byte[] message);
+        Task<IStatus<string>> StreamAsync(byte[] message,INetworkNode receiver);
 
         /// <summary>
         /// Used by nodes to send data over a one-time link in a connectionless protocol asynchronously
@@ -149,48 +154,42 @@ namespace Framework.Common.Services
         /// <summary>
         /// Opens a port for receiving incoming connections in a connection-oriented protocol
         /// </summary>
-        /// <param name="port">Port number to listen on</param>
         /// <returns>A status indicating result of the operation</returns>
-        void Listen(int port);
+        void Listen();
 
         /// <summary>
         /// Opens a port for receiving a limited amount of incoming connections in a connection-oriented protocol
         /// </summary>
-        /// <param name="port">Port number to listen on</param>
         /// <param name="maxConnections">Maximum number of connections allowed</param>
         /// <returns>A status indicating result of the operation</returns>
-        void Listen(int port, int maxConnections);
+        void Listen(int maxConnections);
 
         /// <summary>
         /// Opens a port for receiving incoming connections from a client white-list
         /// </summary>
-        /// <param name="port">Port number to listen on</param>
         /// <param name="validClients"></param>
         /// <returns>A status indicating result of the operation</returns>
-        void Listen(int port, ISet<INetworkNode> validClients);
+        void Listen( ISet<INetworkNode> validClients);
 
         /// <summary>
         /// Opens a port for receiving incoming connections in a connection-oriented protocol asynchronously
         /// </summary>
-        /// <param name="port">Port number to listen on</param>
         /// <returns>A completion token encapsulating the status indicating result of the operation</returns>
-        Task ListenAsync(int port);
+        Task ListenAsync();
 
         /// <summary>
         /// Opens a port for receiving a limited amount of incoming connections in a connection-oriented protocol asynchronously
         /// </summary>
-        /// <param name="port">Port number to listen on</param>
         /// <param name="maxConnections">Maximum number of connections allowed</param>
         /// <returns>A completion token encapsulating the status indicating result of the operation</returns>
-        Task ListenAsync(int port, int maxConnections);
+        Task ListenAsync( int maxConnections);
 
         /// <summary>
         /// Opens a port for receiving incoming connections from a client white-list asynchronously
         /// </summary>
-        /// <param name="port">Port number to listen on</param>
         /// <param name="validClients"></param>
         /// <returns>A completion token encapsulating the status indicating result of the operation</returns>
-        Task ListenAsync(int port, ISet<INetworkNode> validClients);
+        Task ListenAsync( ISet<INetworkNode> validClients);
 
         
 

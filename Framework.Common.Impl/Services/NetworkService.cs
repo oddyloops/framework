@@ -39,7 +39,7 @@ namespace Framework.Common.Impl.Services
                 {
                     if (OnReceivedStreamMessage != null)
                     {
-                        SocketEventArgs args = new SocketEventArgs(buffer, senderNode);
+                        SocketEventArgs args = new SocketEventArgs(buffer.Take(received).ToArray(), senderNode);
                         OnReceivedStreamMessage(socket, args);
                     }
                 }
@@ -55,8 +55,6 @@ namespace Framework.Common.Impl.Services
 
         public event ReceivedStreamHandler OnReceivedStreamMessage;
 
-        public event ReceivedDatagramHandler OnReceivedDatagram;
-
 
         [Import("JsonConfig")]
         public IConfiguration Config { get; set; }
@@ -71,7 +69,9 @@ namespace Framework.Common.Impl.Services
 
         public INetworkNode Self { get; }
 
-        public bool IsConnectionless { get; set; }
+        public bool IsConnectionless { get; private set; }
+
+    
 
         /// <summary>
         /// Timeout value in ms for connecting to a server
@@ -100,10 +100,20 @@ namespace Framework.Common.Impl.Services
    
         public NetworkService()
         {
+            IsConnectionless = Config.GetValue(ConfigConstants.IS_CONNECTIONLESS) == "1";
+            AddressScheme =(AddressFamily) Enum.Parse(typeof(AddressFamily), Config.GetValue(ConfigConstants.ADDRESS_FAMILY));
+            Protocol = (ProtocolType)Enum.Parse(typeof(ProtocolType), Config.GetValue(ConfigConstants.PROTOCOL));
             ConnectedClients = new Dictionary<INetworkNode, Thread>();
             Self = Util.Container.CreateInstance<INetworkNode>();
             Self.Name = Dns.GetHostName();
             
+
+            string portStr = Config.GetValue(ConfigConstants.LISTENING_PORT);
+            if(!string.IsNullOrEmpty(portStr))
+            {
+                Self.ListeningPort = Convert.ToInt32(portStr);
+            }
+
             IPAddress address = (from addy in Dns.GetHostAddresses(Self.Name)
                                  where addy.AddressFamily == AddressScheme
                                  select addy).First();
@@ -127,7 +137,10 @@ namespace Framework.Common.Impl.Services
 
         public IStatus<string> Connect(byte[] address, int port)
         {
-
+            if (IsConnectionless)
+            {
+                throw new InvalidOperationException("Cannot establish a connection in a connectionless protocol");
+            }
             IPAddress endpoint = new IPAddress(address);
             Socket client = new Socket(AddressScheme, SocketType.Stream, Protocol);
             
@@ -179,6 +192,10 @@ namespace Framework.Common.Impl.Services
 
         public async Task<IStatus<string>> ConnectAsync(byte[] address, int port)
         {
+            if(IsConnectionless)
+            {
+                throw new InvalidOperationException("Cannot establish a connection in a connectionless protocol");
+            }
             IPAddress endpoint = new IPAddress(address);
             Socket client = new Socket(AddressScheme, SocketType.Stream, Protocol);
             
@@ -261,19 +278,23 @@ namespace Framework.Common.Impl.Services
             }
         }
 
-        public void Listen(int port)
+        public void Listen()
         {
-            Listen(port, int.MaxValue);
+            Listen(int.MaxValue);
         }
 
-        public void Listen(int port, int maxConnections)
+        public void Listen( int maxConnections)
         {
+            if (IsConnectionless)
+            {
+                throw new InvalidOperationException("Cannot establish a connection in a connectionless protocol");
+            }
             if (Self.Socket == null)
             {
                 Self.Socket = new Socket(AddressScheme, SocketType.Stream, Protocol);
             }
-            IPAddress selfAdd = new IPAddress(Self.Address);
-            Self.Socket.Bind(new IPEndPoint(selfAdd, port));
+            
+            Self.Socket.Bind(new IPEndPoint(IPAddress.Any, Self.ListeningPort));
             Self.Socket.Listen(maxConnections);
             while (true)
             {
@@ -308,14 +329,18 @@ namespace Framework.Common.Impl.Services
 
         }
 
-        public void Listen(int port, ISet<INetworkNode> validClients)
+        public void Listen( ISet<INetworkNode> validClients)
         {
+            if (IsConnectionless)
+            {
+                throw new InvalidOperationException("Cannot establish a connection in a connectionless protocol");
+            }
             if (Self.Socket == null)
             {
                 Self.Socket = new Socket(AddressScheme, SocketType.Stream, Protocol);
             }
-            IPAddress selfAdd = new IPAddress(Self.Address);
-            Self.Socket.Bind(new IPEndPoint(selfAdd, port));
+            
+            Self.Socket.Bind(new IPEndPoint(IPAddress.Any, Self.ListeningPort));
             Self.Socket.Listen(int.MaxValue);
             while (true)
             {
@@ -360,56 +385,118 @@ namespace Framework.Common.Impl.Services
             }
         }
 
-        public async Task ListenAsync(int port)
+        public async Task ListenAsync()
         {
-            await ListenAsync(port, int.MaxValue);
+            await ListenAsync(int.MaxValue);
         }
 
-        public Task ListenAsync(int port, int maxConnections)
+        public Task ListenAsync(int maxConnections)
         {
-            Listen(port, maxConnections);
+            Listen( maxConnections);
             return Task.FromResult(0);
         }
 
-        public Task ListenAsync(int port, ISet<INetworkNode> validClients)
+        public Task ListenAsync(ISet<INetworkNode> validClients)
         {
-            Listen(port, validClients);
+            Listen( validClients);
             return Task.FromResult(0);
         }
 
         public byte[] ReceiveDatagram()
         {
-            throw new NotImplementedException();
+            if(Self.Socket == null)
+            {
+                Self.Socket = new Socket(AddressScheme, SocketType.Dgram, Protocol);
+                Self.Socket.Bind(new IPEndPoint(IPAddress.Any, Self.ListeningPort));
+            }
+            Self.Socket.ReceiveBufferSize = ReceiveBufferSize;
+            byte[] buffer = new byte[ReceiveBufferSize];
+            EndPoint sender = new IPEndPoint(IPAddress.Any, 0);
+            int received = 0;
+            
+            if(ReceiveTimeOut <= 0)
+            {
+                received = Self.Socket.ReceiveFrom(buffer, ref sender);
+            }
+            else
+            {
+                Thread receiveThread = new Thread(() => received = Self.Socket.ReceiveFrom(buffer, ref sender));
+                receiveThread.Start();
+                receiveThread.Join(ReceiveTimeOut);
+            }
+
+            if(received > 0)
+            {
+                return buffer.Take(received).ToArray();
+            }
+            else
+            {
+                //timed out
+                return null;
+            }
+            
         }
 
         public Task<byte[]> ReceiveDatagramAsync()
         {
-            throw new NotImplementedException();
+            return Task.FromResult(ReceiveDatagram());
         }
 
       
 
         public IStatus<string> SendDatagram(byte[] message, INetworkNode receiver)
         {
-            throw new NotImplementedException();
+            receiver.Socket.SendTo(message, receiver.Socket.RemoteEndPoint);
+            IStatus<string> status = Util.Container.CreateInstance<IStatus<string>>();
+            status.IsSuccess = true;
+            status.StatusMessage = "Message Sent";
+            return status;
         }
 
       
 
         public Task<IStatus<string>> SendDatagramAsync(byte[] message, INetworkNode receiver)
         {
-            throw new NotImplementedException();
+            return Task.FromResult(SendDatagram(message, receiver));
         }
 
       
-        public IStatus<string> Stream(byte[] message)
+        public IStatus<string> Stream(byte[] message, INetworkNode receiver)
         {
-            throw new NotImplementedException();
+            Socket recipient = null;
+            if(ConnectedServer != null && ConnectedServer.GetHashCode() == receiver.GetHashCode())//check if its server
+            {
+                recipient = ConnectedServer.Socket;
+            }
+            else
+            {
+                foreach(var client in ConnectedClients.Keys)
+                {
+                    if(client.GetHashCode() == receiver.GetHashCode())
+                    {
+                        recipient = client.Socket;
+                    }
+                }
+            }
+
+            IStatus<string> status = Util.Container.CreateInstance<IStatus<string>>();
+            if (recipient == null)
+            {
+                status.IsSuccess = false;
+                status.StatusMessage = "No matching server or client node found in the list of connected nodes";
+            }
+            else
+            {
+                recipient.Send(message);
+                status.IsSuccess = true;
+                status.StatusMessage = "Message Sent";
+            }
+            return status;
         }
 
-        public Task<IStatus<string>> StreamAsync(byte[] message)
+        public Task<IStatus<string>> StreamAsync(byte[] message,INetworkNode receiver)
         {
-            throw new NotImplementedException();
+            return Task.FromResult(Stream(message,receiver));
         }
 
         public bool TryReceiveDatagram(out byte[] messageReceived)

@@ -46,7 +46,7 @@
         internal const string RECOVERY_MAIL_TEMPLATE_PATH = "RECOVERY_MAIL_TEMPLATE_PATH";
 
         /// <summary>
-        /// Recovery emaill subject
+        /// Recovery email subject
         /// </summary>
         internal const string RECOVERY_MAIL_SUBJECT = "RECOVERY_MAIL_SUBJECT";
 
@@ -59,6 +59,26 @@
         /// Maximum size in bytes of socket data that can be received at once
         /// </summary>
         internal const string RECEIVE_BUFFER_SIZE = "RECEIVE_BUFFER_SIZE";
+        
+        /// <summary>
+        /// A flag indicating if protocol requires a connection or not
+        /// </summary>
+        internal const string IS_CONNECTIONLESS = "IS_CONNECTIONLESS";
+
+        /// <summary>
+        /// Network protocol (e.g: TCP, UDP, IP, etc)
+        /// </summary>
+        internal const string PROTOCOL = "PROTOCOL";
+
+        /// <summary>
+        /// The addressing scheme of protocol in use (e.g: IPv4/b6, Data-link, Apple-Talk, etc)
+        /// </summary>
+        internal const string ADDRESS_FAMILY = "ADDRESS_FAMILY";
+        
+        /// <summary>
+        /// The server's listening port
+        /// </summary>
+        internal const string LISTENING_PORT = "LISTENING_PORT";
     }
 
 

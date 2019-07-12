@@ -23,9 +23,16 @@ namespace Framework.Common.Impl.Items
         public byte[] Address { get; set; }
 
         /// <summary>
+        /// Node's listening port
+        /// </summary>
+        public int ListeningPort { get; set; }
+
+        /// <summary>
         /// A handle to the node's connection socket
         /// </summary>
         public Socket Socket { get; set; }
+
+
 
         public override int GetHashCode()
         {
