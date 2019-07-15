@@ -14,13 +14,23 @@ using System.Security;
 
 namespace Framework.Common.Impl.Services
 {
+    /// <summary>
+    /// A concrete implementation of the INetworkService for a client-server architecture
+    /// </summary>
     [Export(typeof(INetworkService))]
     public class NetworkService : INetworkService
     {
-        
+        /// <summary>
+        /// Thread client uses to listen for incoming messages from server in a connection
+        /// oriented protocol
+        /// </summary>
         private Thread _clientListeningThread;
 
         #region Helpers
+        /// <summary>
+        /// Method executed by the client listening thread
+        /// </summary>
+        /// <param name="threadArgs">An object encapsulating the server node connection</param>
         private void MessageListenerAction(object threadArgs)
         {
             INetworkNode senderNode = (INetworkNode)threadArgs;
@@ -53,22 +63,50 @@ namespace Framework.Common.Impl.Services
         }
         #endregion
 
+        /// <summary>
+        /// Event handler that is triggered upon reciept of a message
+        /// in a connection-oriented protocol
+        /// </summary>
         public event ReceivedStreamHandler OnReceivedStreamMessage;
 
 
+        /// <summary>
+        /// A reference to a configuration component used to access config settings required by the network service
+        /// </summary>
         [Import("JsonConfig")]
         public IConfiguration Config { get; set; }
 
+        /// <summary>
+        /// Address scheme network nodes will be based on
+        /// </summary>
         public AddressFamily AddressScheme { get; set; }
 
+        /// <summary>
+        /// Intended network protocol
+        /// </summary>
         public ProtocolType Protocol { get; set; }
 
+        /// <summary>
+        /// A collection of all clients connected to the server
+        /// with their respective listening threads
+        /// </summary>
         public IDictionary<INetworkNode, Thread> ConnectedClients { get; }
 
+        /// <summary>
+        /// Server that the current node is connected to
+        /// </summary>
         public INetworkNode ConnectedServer { get; private set; }
 
+
+        /// <summary>
+        /// Current node
+        /// </summary>
         public INetworkNode Self { get; }
 
+
+        /// <summary>
+        /// A flag to determine if the service protocol is connection-oriented or connectionless network
+        /// </summary>
         public bool IsConnectionless { get; private set; }
 
     
@@ -126,7 +164,12 @@ namespace Framework.Common.Impl.Services
 
         }
 
-
+        /// <summary>
+        /// Used by clients for connecting to a server in a connection-oriented protocol
+        /// </summary>
+        /// <param name="name">Server name</param>
+        /// <param name="port">Port for connection</param>
+        /// <returns>A status indicating result of the operation</returns>
         public IStatus<string> Connect(string name, int port)
         {
             IPAddress address = (from addy in Dns.GetHostAddresses(name)
@@ -135,6 +178,12 @@ namespace Framework.Common.Impl.Services
             return Connect(address.GetAddressBytes(), port);
         }
 
+        /// <summary>
+        /// Used by clients for connecting to a server in a connection-oriented protocol
+        /// </summary>
+        /// <param name="address">Server address</param>
+        /// <param name="port">Port for connection</param>
+        /// <returns>A status indicating result of the operation</returns>
         public IStatus<string> Connect(byte[] address, int port)
         {
             if (IsConnectionless)
@@ -180,8 +229,14 @@ namespace Framework.Common.Impl.Services
             return status;
         }
 
-        
 
+
+        /// <summary>
+        /// Used by clients for connecting to a server in a connection-oriented protocol asynchronously
+        /// </summary>
+        /// <param name="name">Server name</param>
+        /// <param name="port">Port for connection</param>
+        /// <returns>A completion token encapsulating the status indicating result of the operation</returns>
         public async Task<IStatus<string>> ConnectAsync(string name, int port)
         {
             IPAddress address = (from addy in (await Dns.GetHostAddressesAsync(name))
@@ -190,6 +245,12 @@ namespace Framework.Common.Impl.Services
             return await ConnectAsync(address.GetAddressBytes(), port);
         }
 
+        /// <summary>
+        /// Used by clients for connecting to a server in a connection-oriented protocol asynchronously
+        /// </summary>
+        /// <param name="address">Server address</param>
+        /// <param name="port">Port for connection</param>
+        /// <returns>A completion token encapsulating the status indicating result of the operation</returns>
         public async Task<IStatus<string>> ConnectAsync(byte[] address, int port)
         {
             if(IsConnectionless)
@@ -237,8 +298,10 @@ namespace Framework.Common.Impl.Services
             return status;
         }
 
-    
 
+        /// <summary>
+        /// Disconnects all clients from server and disposes all associated system resources
+        /// </summary>
         public void Disconnect()
         {
             if (ConnectedClients != null)
@@ -265,6 +328,11 @@ namespace Framework.Common.Impl.Services
             }
         }
 
+
+        /// <summary>
+        /// Disconnects a client node from this server
+        /// </summary>
+        /// <param name="client"></param>
         public void DisconnectNode(INetworkNode client)
         {
             if (ConnectedClients.ContainsKey(client))
@@ -278,11 +346,18 @@ namespace Framework.Common.Impl.Services
             }
         }
 
+        /// <summary>
+        /// Opens a port for receiving incoming connections in a connection-oriented protocol
+        /// </summary>
         public void Listen()
         {
             Listen(int.MaxValue);
         }
 
+        /// <summary>
+        /// Opens a port for receiving a limited amount of incoming connections in a connection-oriented protocol
+        /// </summary>
+        /// <param name="maxConnections">Maximum number of connections allowed</param>
         public void Listen( int maxConnections)
         {
             if (IsConnectionless)
@@ -329,6 +404,10 @@ namespace Framework.Common.Impl.Services
 
         }
 
+        /// <summary>
+        /// Opens a port for receiving incoming connections from a client white-list
+        /// </summary>
+        /// <param name="validClients">Client white list</param>
         public void Listen( ISet<INetworkNode> validClients)
         {
             if (IsConnectionless)
@@ -385,23 +464,43 @@ namespace Framework.Common.Impl.Services
             }
         }
 
+
+        /// <summary>
+        /// Opens a port for receiving incoming connections in a connection-oriented protocol asynchronously
+        /// </summary>
+        /// <returns>A completion token </returns>
         public async Task ListenAsync()
         {
             await ListenAsync(int.MaxValue);
         }
 
+
+        /// <summary>
+        /// Opens a port for receiving a limited amount of incoming connections in a connection-oriented protocol asynchronously
+        /// </summary>
+        /// <param name="maxConnections">Maximum number of connections allowed</param>
+        /// <returns>A completion token</returns>
         public Task ListenAsync(int maxConnections)
         {
             Listen( maxConnections);
             return Task.FromResult(0);
         }
 
+        /// <summary>
+        /// Opens a port for receiving incoming connections from a client white-list asynchronously
+        /// </summary>
+        /// <param name="validClients">Valid Clients</param>
+        /// <returns>A completion token</returns>
         public Task ListenAsync(ISet<INetworkNode> validClients)
         {
             Listen( validClients);
             return Task.FromResult(0);
         }
 
+        /// <summary>
+        /// Waits for incoming message from any sender in a connectionless protocol
+        /// </summary>
+        /// <returns>Received message</returns>
         public byte[] ReceiveDatagram()
         {
             if(Self.Socket == null)
@@ -437,12 +536,21 @@ namespace Framework.Common.Impl.Services
             
         }
 
+        /// <summary>
+        /// Waits for incoming message from any sender in a connectionless protocol asynchrobously
+        /// </summary>
+        /// <returns>A completion token encapsulating the received message</returns>
         public Task<byte[]> ReceiveDatagramAsync()
         {
             return Task.FromResult(ReceiveDatagram());
         }
 
-      
+        /// <summary>
+        /// Used by nodes to send data over a one-time link in a connectionless protocol
+        /// </summary>
+        /// <param name="message">Message data</param>
+        /// <param name="receiver">Recipient node</param>
+        /// <returns>A status indicating result of the operation</returns>
 
         public IStatus<string> SendDatagram(byte[] message, INetworkNode receiver)
         {
@@ -453,20 +561,32 @@ namespace Framework.Common.Impl.Services
             return status;
         }
 
-      
 
+        /// <summary>
+        /// Used by nodes to send data over a one-time link in a connectionless protocol asynchronously
+        /// </summary>
+        /// <param name="message">Message data</param>
+        /// <param name="receiver">Recipient node</param>
+        /// <returns>A completion token encapsulating the status indicating result of the operation</returns>
         public Task<IStatus<string>> SendDatagramAsync(byte[] message, INetworkNode receiver)
         {
             return Task.FromResult(SendDatagram(message, receiver));
         }
 
-      
+        /// <summary>
+        /// Used by clients to send data over an established connection in a connection-oriented protocol
+        /// </summary>
+        /// <param name="message">Message data</param>
+        /// <param name="receiver">Connected receiver of message</param>
+        /// <returns>A status indicating result of the operation</returns>
         public IStatus<string> Stream(byte[] message, INetworkNode receiver)
         {
+            
             Socket recipient = null;
             if(ConnectedServer != null && ConnectedServer.GetHashCode() == receiver.GetHashCode())//check if its server
             {
                 recipient = ConnectedServer.Socket;
+                
             }
             else
             {
@@ -487,6 +607,7 @@ namespace Framework.Common.Impl.Services
             }
             else
             {
+                
                 recipient.Send(message);
                 status.IsSuccess = true;
                 status.StatusMessage = "Message Sent";
@@ -494,19 +615,15 @@ namespace Framework.Common.Impl.Services
             return status;
         }
 
+        /// <summary>
+        /// Used by clients to send data over an established connection in a connection-oriented protocol asynchronously
+        /// </summary>
+        /// <param name="message">Message data</param>
+        /// <param name="receiver">Connected receiver of message</param>
+        /// <returns>A completion token encapsulating the status indicating result of the operation</returns>
         public Task<IStatus<string>> StreamAsync(byte[] message,INetworkNode receiver)
         {
             return Task.FromResult(Stream(message,receiver));
-        }
-
-        public bool TryReceiveDatagram(out byte[] messageReceived)
-        {
-            throw new NotImplementedException();
-        }
-
-        public Task<bool> TryReceiveDatagramAsync(out byte[] messageReceived)
-        {
-            throw new NotImplementedException();
         }
 
       
@@ -519,7 +636,7 @@ namespace Framework.Common.Impl.Services
             {
                 if (disposing)
                 {
-                    // TODO: dispose managed state (managed objects).
+                    Disconnect();
                 }
 
                 // TODO: free unmanaged resources (unmanaged objects) and override a finalizer below.

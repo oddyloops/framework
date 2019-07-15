@@ -18,6 +18,10 @@ namespace Framework.Common.Services
     /// </summary>
     public interface INetworkService : IService, IDisposable
     {
+        /// <summary>
+        /// Event handler that is triggered upon reciept of a message
+        /// in a connection-oriented protocol
+        /// </summary>
         event ReceivedStreamHandler OnReceivedStreamMessage;
 
 
@@ -38,6 +42,7 @@ namespace Framework.Common.Services
 
         /// <summary>
         /// A collection of all clients connected to the server
+        /// with their respective listening threads
         /// </summary>
         IDictionary<INetworkNode,Thread> ConnectedClients { get;  }
 
@@ -154,41 +159,38 @@ namespace Framework.Common.Services
         /// <summary>
         /// Opens a port for receiving incoming connections in a connection-oriented protocol
         /// </summary>
-        /// <returns>A status indicating result of the operation</returns>
         void Listen();
 
         /// <summary>
         /// Opens a port for receiving a limited amount of incoming connections in a connection-oriented protocol
         /// </summary>
         /// <param name="maxConnections">Maximum number of connections allowed</param>
-        /// <returns>A status indicating result of the operation</returns>
         void Listen(int maxConnections);
 
         /// <summary>
         /// Opens a port for receiving incoming connections from a client white-list
         /// </summary>
-        /// <param name="validClients"></param>
-        /// <returns>A status indicating result of the operation</returns>
+        /// <param name="validClients">Client white list</param>
         void Listen( ISet<INetworkNode> validClients);
 
         /// <summary>
         /// Opens a port for receiving incoming connections in a connection-oriented protocol asynchronously
         /// </summary>
-        /// <returns>A completion token encapsulating the status indicating result of the operation</returns>
+        /// <returns>A completion token </returns>
         Task ListenAsync();
 
         /// <summary>
         /// Opens a port for receiving a limited amount of incoming connections in a connection-oriented protocol asynchronously
         /// </summary>
         /// <param name="maxConnections">Maximum number of connections allowed</param>
-        /// <returns>A completion token encapsulating the status indicating result of the operation</returns>
+        /// <returns>A completion token</returns>
         Task ListenAsync( int maxConnections);
 
         /// <summary>
         /// Opens a port for receiving incoming connections from a client white-list asynchronously
         /// </summary>
-        /// <param name="validClients"></param>
-        /// <returns>A completion token encapsulating the status indicating result of the operation</returns>
+        /// <param name="validClients">Valid Clients</param>
+        /// <returns>A completion token</returns>
         Task ListenAsync( ISet<INetworkNode> validClients);
 
         
@@ -201,13 +203,6 @@ namespace Framework.Common.Services
         /// <returns>Received message</returns>
         byte[] ReceiveDatagram();
 
-        /// <summary>
-        /// A non-blocking attempt to receive message from an abitrary sender in a connectionless protocol
-        /// </summary>
-        /// <param name="messageReceived">An output parameter containing received message if any</param>
-        /// <returns>>A flag indicating success/failure of the operation</returns>
-        bool TryReceiveDatagram(out byte[] messageReceived);
-
        
 
         /// <summary>
@@ -216,12 +211,6 @@ namespace Framework.Common.Services
         /// <returns>A completion token encapsulating the received message</returns>
         Task<byte[]> ReceiveDatagramAsync();
 
-        /// <summary>
-        /// A non-blocking attempt to receive message from an abitrary sender in a connectionless protocol asynchronously
-        /// </summary>
-        /// <param name="messageReceived">An output parameter containing received message if any</param>
-        /// <returns>>A completion token encapsulating the flag indicating success/failure of the operation</returns>
-        Task<bool> TryReceiveDatagramAsync(out byte[] messageReceived);
 
         /// <summary>
         /// Disconnects a client node from this server
