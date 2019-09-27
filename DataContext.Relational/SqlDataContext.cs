@@ -89,24 +89,7 @@ namespace DataContext.Relational
             return connection;
         }
 
-        /// <summary>
-        /// Helper method for converting a key value pair to a concrete database named parameter
-        /// </summary>
-        /// <param name="key">Parameter name</param>
-        /// <param name="value">Parameter value</param>
-        /// <returns>A platform dependent database parameter</returns>
-        private DbParameter CreateParameter(string key, object value)
-        {
-            switch (_dbType)
-            {
-                case DbType.MySql:
-                    return new MySqlParameter(key, value);
-                case DbType.Oracle:
-                    return new OracleParameter(key, value);
-                default:
-                    return new SqlParameter(key, value); //default to sql server
-            }
-        }
+       
 
         /// <summary>
         /// Helper method for creating a database command based on current database platform
@@ -123,7 +106,10 @@ namespace DataContext.Relational
             {
                 foreach (var param in parameters)
                 {
-                    cmd.Parameters.Add(CreateParameter(param.Key, param.Value));
+                    DbParameter dbParam = cmd.CreateParameter();
+                    dbParam.ParameterName = param.Key;
+                    dbParam.Value = param.Value;
+                    cmd.Parameters.Add(dbParam);
                 }
             }
             return cmd;
