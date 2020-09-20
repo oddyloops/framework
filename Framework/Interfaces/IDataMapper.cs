@@ -58,11 +58,12 @@ namespace Framework.Interfaces
         void SetFieldValue(string fieldName, object value, object obj);
 
         /// <summary>
-        /// Creates an instance of type T based on field name-value pairs
+        /// Fills an object of type T based on field name-value pairs
         /// </summary>
+        /// <param name="obj">Object</param>
         /// <param name="fields">Key-pairs of each field</param>
         /// <returns>An instance of type T</returns>
-        T CreateInstanceFromFields<T>(IDictionary<string, object> fields);
+        T CreateInstanceFromFields<T>(T obj,IDictionary<string, object> fields);
 
         /// <summary>
         /// Gets the map name of an object class

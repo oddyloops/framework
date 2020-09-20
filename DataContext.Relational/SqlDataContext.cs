@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 using System.Data.Common;
 using System.Data.SqlClient;
 using MySql.Data.MySqlClient;
-using Oracle.ManagedDataAccess.Client;
+//using Oracle.ManagedDataAccess.Client;
 using Framework.Utils;
 using System.Data;
 using System.Text;
@@ -49,7 +49,6 @@ namespace DataContext.Relational
         /// <summary>
         /// A reference to a configuration component used to access config settings required by the data provider
         /// </summary>
-        [Import("JsonConfig")]
         public IConfiguration Config { get; set; }
 
         /// <summary>
@@ -67,15 +66,19 @@ namespace DataContext.Relational
         /// <returns>A platform dependent database connection object</returns>
         private DbConnection CreateConnection()
         {
+            if(_connectionString == null)
+            {
+                Connect();
+            }
             DbConnection connection = null;
             switch (_dbType)
             {
                 case DbType.MySql:
                     connection = new MySqlConnection(_connectionString);
                     break;
-                case DbType.Oracle:
+                /*case DbType.Oracle:
                     connection = new OracleConnection(_connectionString);
-                    break;
+                    break;*/
                 default:
                     connection = new SqlConnection(_connectionString); //default to sql server
                     break;
@@ -98,7 +101,7 @@ namespace DataContext.Relational
         /// <param name="parameters">SQL command parameters</param>
         /// <param name="connection">Platform dependent database connection</param>
         /// <returns>Platform dependent database command</returns>
-        private DbCommand CreateCommand(string command, IDictionary<string, object> parameters,DbConnection connection)
+        private DbCommand CreateCommand(string command, List<KeyValuePair<string, object>> parameters,DbConnection connection)
         {
             DbCommand cmd = connection.CreateCommand();
             cmd.CommandText = command;
@@ -121,19 +124,40 @@ namespace DataContext.Relational
         /// <param name="record">Object to be serialized</param>
         /// <param name="addNulls">A flag indicating if null fields should be serialized</param>
         /// <returns>A key value pair of object's field and values</returns>
-        private IDictionary<string,object> TransformObjectToParams(object record, bool addNulls = true)
+        private List<KeyValuePair<string,object>> TransformObjectToParams(object record, bool addNulls = true)
         {
-         
-            IDictionary<string, object> paramRec = new SortedDictionary<string, object>(); //need to maintain order for traversals
+
+            List<KeyValuePair<string, object>> paramRec = new List<KeyValuePair<string, object>>(); //need to maintain order for traversals
             IList<string> fieldNames = Mapper.GetFieldNames(record.GetType());
             foreach(var field in fieldNames)
             {
                 if (addNulls || Mapper.GetField(field, record) != null)
                 {
-                    paramRec.Add(field, Mapper.GetField(field, record));
+                    paramRec.Add(new KeyValuePair<string, object>(field, Mapper.GetField(field, record)));
                 }
             }
             return paramRec;
+        }
+
+        /// <summary>
+        /// Used by the update method to bring the key field to
+        /// the end of the list
+        /// </summary>
+        /// <param name="objParam">List of fields</param>
+        private void SwapKeyForLast<T>(List<KeyValuePair<string, object>> objParam)
+        {
+            string keyName = Mapper.GetKeyMapName(typeof(T));
+            int i = 0;
+            for(;i < objParam.Count; i++)
+            {
+                var parm = objParam[i];
+                if(keyName == parm.Key)
+                {
+                    objParam.RemoveAt(i);
+                    objParam.Add(parm);
+                    return;
+                }
+            }
         }
 
         /// <summary>
@@ -142,13 +166,13 @@ namespace DataContext.Relational
         /// <param name="parameters">Serialized key-value pairs</param>
         /// <param name="paramOffset">Parameter label sequence offset</param>
         /// <returns>A new key-value pair with the key being sequential parameter labels</returns>
-        private static IDictionary<string,object> TransformToSqlParam(IDictionary<string,object> parameters, int paramOffset)
+        private static List<KeyValuePair<string, object>> TransformToSqlParam(List<KeyValuePair<string, object>> parameters, int paramOffset)
         {
-            IDictionary<string, object> sqlParameters = new SortedDictionary<string, object>();
+            List<KeyValuePair<string, object>> sqlParameters = new List<KeyValuePair<string, object>>();
             int paramCount = 0;
             foreach(var param in parameters)
             {
-                sqlParameters.Add("@P" + (paramCount + paramOffset), param.Value);
+                sqlParameters.Add(new KeyValuePair<string, object>("@P" + (paramCount + paramOffset), param.Value == null ? DBNull.Value : param.Value));
                 paramCount++;
             }
 
@@ -161,21 +185,27 @@ namespace DataContext.Relational
         /// <param name="parameters">Serialized object key-value pair with the key being field names</param>
         /// <param name="tableName">Table name in statement</param>
         /// <param name="paramOffset">Parameter label sequence offset</param>
+        /// <param name="key">Key-name value pair for building the where clause</param>
         /// <returns>A parameterized update statement string</returns>
-        private string BuildCommandForUpdate(IDictionary<string,object> parameters, string tableName, int paramOffset)
+        private string BuildCommandForUpdate(List<KeyValuePair<string, object>> parameters, string tableName, int paramOffset,KeyValuePair<string,object> key)
         {
             StringBuilder command = new StringBuilder($"UPDATE {_tablePrefix}{tableName} SET ");
             bool isFirst = true;
             int paramCount = 0;
             foreach(var param in parameters)
             {
-                if(!isFirst)
-                {
-                    command.Append(",");
+                if (param.Key != key.Key)
+                { //exclude key field
+                    if (!isFirst)
+                    {
+                        command.Append(",");
+                    }
+                    command.Append($"{param.Key} = @P{paramCount + paramOffset}");
+                    isFirst = false;
+                    paramCount++;
                 }
-                command.Append($"{param.Key} = @P{paramCount + paramOffset}");
-                isFirst = false;
             }
+            command.Append($" WHERE {key.Key} = @P{paramCount + paramOffset};");
             return command.ToString();
         }
 
@@ -187,7 +217,7 @@ namespace DataContext.Relational
         /// <param name="tableName">Table name in statement</param>
         /// <param name="paramOffset">Parameter label sequence offset</param>
         /// <returns>A parameterized insert statement string</returns>
-        private string BuildCommandForInsert(IDictionary<string,object> parameters,string tableName, int paramOffset)
+        private string BuildCommandForInsert(List<KeyValuePair<string, object>> parameters,string tableName, int paramOffset)
         {
             StringBuilder command = new StringBuilder($"INSERT INTO {_tablePrefix}{tableName}(");
             bool isFirst = true;
@@ -212,6 +242,7 @@ namespace DataContext.Relational
                 command.Append("@P" + (paramOffset + i));
                 isFirst = false;
             }
+            command.Append(");");
             return command.ToString();
 
         }
@@ -237,26 +268,29 @@ namespace DataContext.Relational
         /// <param name="skip">Page offset</param>
         /// <param name="length">Page length</param>
         /// <returns>SQL paging statement</returns>
-        private string BuildRangeQueryForProvider(int skip, int length)
+        private string BuildRangeQueryForProvider(int skip, int length,string keyName)
         {
             switch(_dbType)
             {
                 case DbType.MySql:
                     return $"LIMIT {skip},{length}";
                 default:
-                    return $"OFFSET {skip} ROWS FETCH NEXT {length} ROWS ONLY"; //sql server and oracle share the same syntax
+                    return $"ORDER BY {keyName} OFFSET {skip} ROWS FETCH NEXT {length} ROWS ONLY"; //sql server and oracle share the same syntax
                 
             }
 
         }
+
 
         #endregion
 
         /// <summary>
         /// Constructs an instance of this class based on configuration values
         /// </summary>
-        public SqlDataContext()
+        [ImportingConstructor]
+        public SqlDataContext([Import("JsonConfig")]IConfiguration config)
         {
+            Config = config;
             AutoCommit = Config.GetValue(ConfigConstants.RELATIONAL_DB_AUTOCOMMIT) == "1";
 
             if (!AutoCommit)
@@ -269,7 +303,7 @@ namespace DataContext.Relational
 
             string tablePrefix = Config.GetValue(ConfigConstants.RELATIONAL_TABLE_PREFIX);
             _tablePrefix = tablePrefix ?? string.Empty;
-
+            Connect();
 
         }
 
@@ -325,12 +359,12 @@ namespace DataContext.Relational
             try
             {
                 connection.Open();
-                string tableName = Mapper.GetObjectMapName(obj.GetType());
-                string keyName = Mapper.GetKeyMapName(obj.GetType());
+                string tableName = Mapper.GetObjectMapName(typeof(T));
+                string keyName = Mapper.GetKeyMapName(typeof(T));
 
                 string cmdStr = $"DELETE FROM {_tablePrefix}{tableName} WHERE {keyName} = @P0";
-                IDictionary<string, object> parameters = new Dictionary<string, object> {
-                    { "@P0", Mapper.GetKeyValue(obj) }
+                List<KeyValuePair<string, object>> parameters = new List<KeyValuePair<string, object>> {
+                    new KeyValuePair<string, object>( "@P0", Mapper.GetKeyValue(obj))
                 };
                 var cmd = CreateCommand(cmdStr,parameters,connection);
                 int result = cmd.ExecuteNonQuery();
@@ -367,8 +401,8 @@ namespace DataContext.Relational
                 string keyName = Mapper.GetKeyMapName(typeof(T));
 
                 string cmdStr = $"DELETE FROM {_tablePrefix}{tableName} WHERE {keyName} = @P0";
-                IDictionary<string, object> parameters = new Dictionary<string, object> {
-                    { "@P0", key }
+                List<KeyValuePair<string, object>> parameters = new List<KeyValuePair<string, object>> {
+                    new KeyValuePair<string, object>( "@P0", key)
                 };
                 var cmd = CreateCommand(cmdStr, parameters, connection);
                 int result = cmd.ExecuteNonQuery();
@@ -404,22 +438,19 @@ namespace DataContext.Relational
                 connection.Open();
                 string tableName = Mapper.GetObjectMapName(typeof(T));
                 string keyName = Mapper.GetKeyMapName(typeof(T));
-                
-
-                //create data table
-
-                DataTable keyTable = new DataTable("KeyTable");
-                keyTable.Columns.Add("ID", Mapper.GetFieldByName(keyName, typeof(T)).PropertyType);
-                foreach(var obj  in objList)
+                StringBuilder keyParmStr = new StringBuilder();
+                List<KeyValuePair<string, object>> parameters = new List<KeyValuePair<string, object>>();
+                for (int i = 0; i < objList.Count; i++)
                 {
-                    keyTable.Rows.Add(Mapper.GetKeyValue(obj));
+                    if (i > 0)
+                    {
+                        keyParmStr.Append(",");
+                    }
+                    keyParmStr.Append($"@P{i}");
+                    parameters.Add(new KeyValuePair<string, object>($"@P{i}", Mapper.GetKeyValue(objList[i])));
                 }
 
-
-                string cmdStr = $"DELETE FROM {_tablePrefix}{tableName} WHERE {keyName} IN  = @P0";
-                IDictionary<string, object> parameters = new Dictionary<string, object> {
-                    { "@P0", keyTable }
-                };
+                string cmdStr = $"DELETE FROM {_tablePrefix}{tableName} WHERE {keyName} IN ({keyParmStr})";
                 var cmd = CreateCommand(cmdStr, parameters, connection);
                 int result = cmd.ExecuteNonQuery();
                 IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
@@ -454,23 +485,19 @@ namespace DataContext.Relational
                 connection.Open();
                 string tableName = Mapper.GetObjectMapName(typeof(T));
                 string keyName = Mapper.GetKeyMapName(typeof(T));
-
-
-                //create data table
-
-                DataTable keyTable = new DataTable("KeyTable");
-                keyTable.Columns.Add("ID", typeof(K));
-                foreach (var key in keyList)
+                StringBuilder keyParmStr = new StringBuilder();
+                List<KeyValuePair<string, object>> parameters = new List<KeyValuePair<string, object>>();
+                for (int i = 0; i < keyList.Count; i++)
                 {
-                    keyTable.Rows.Add(key);
+                    if (i > 0)
+                    {
+                        keyParmStr.Append(",");
+                    }
+                    keyParmStr.Append($"@P{i}");
+                    parameters.Add(new KeyValuePair<string, object>($"@P{i}", keyList[i]));
                 }
 
-
-                string cmdStr = $"DELETE FROM {_tablePrefix}{tableName} WHERE {keyName} IN  = @P0";
-                IDictionary<string, object> parameters = new Dictionary<string, object> {
-                    { "@P0", keyTable }
-                };
-                var cmd = CreateCommand(cmdStr, parameters, connection);
+                string cmdStr = $"DELETE FROM {_tablePrefix}{tableName} WHERE {keyName} IN ({keyParmStr})"; var cmd = CreateCommand(cmdStr, parameters, connection);
                 int result = cmd.ExecuteNonQuery();
                 IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
                 status.IsSuccess = result > 0;
@@ -504,23 +531,19 @@ namespace DataContext.Relational
                 await connection.OpenAsync();
                 string tableName = Mapper.GetObjectMapName(typeof(T));
                 string keyName = Mapper.GetKeyMapName(typeof(T));
-
-
-                //create data table
-
-                DataTable keyTable = new DataTable("KeyTable");
-                keyTable.Columns.Add("ID", Mapper.GetFieldByName(keyName, typeof(T)).PropertyType);
-                foreach (var obj in objList)
+                StringBuilder keyParmStr = new StringBuilder();
+                List<KeyValuePair<string, object>> parameters = new List<KeyValuePair<string, object>>();
+                for (int i = 0; i < objList.Count; i++)
                 {
-                    keyTable.Rows.Add(Mapper.GetKeyValue(obj));
+                    if (i > 0)
+                    {
+                        keyParmStr.Append(",");
+                    }
+                    keyParmStr.Append($"@P{i}");
+                    parameters.Add(new KeyValuePair<string, object>($"@P{i}", Mapper.GetKeyValue(objList[i])));
                 }
 
-
-                string cmdStr = $"DELETE FROM {_tablePrefix}{tableName} WHERE {keyName} IN  = @P0";
-                IDictionary<string, object> parameters = new Dictionary<string, object> {
-                    { "@P0", keyTable }
-                };
-                var cmd = CreateCommand(cmdStr, parameters, connection);
+                string cmdStr = $"DELETE FROM {_tablePrefix}{tableName} WHERE {keyName} IN  ({keyParmStr})"; var cmd = CreateCommand(cmdStr, parameters, connection);
                 int result = await cmd.ExecuteNonQueryAsync();
                 IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
                 status.IsSuccess = result == objList.Count;
@@ -554,22 +577,19 @@ namespace DataContext.Relational
                 await connection.OpenAsync();
                 string tableName = Mapper.GetObjectMapName(typeof(T));
                 string keyName = Mapper.GetKeyMapName(typeof(T));
-
-
-                //create data table
-
-                DataTable keyTable = new DataTable("KeyTable");
-                keyTable.Columns.Add("ID", typeof(K));
-                foreach (var key in keyList)
+                StringBuilder keyParmStr = new StringBuilder();
+                List<KeyValuePair<string, object>> parameters = new List<KeyValuePair<string, object>>();
+                for (int i = 0; i < keyList.Count; i++)
                 {
-                    keyTable.Rows.Add(key);
+                    if(i > 0 )
+                    {
+                        keyParmStr.Append(",");
+                    }
+                    keyParmStr.Append($"@P{i}");
+                    parameters.Add(new KeyValuePair<string, object>($"@P{i}", keyList[i]));
                 }
 
-
-                string cmdStr = $"DELETE FROM {_tablePrefix}{tableName} WHERE {keyName} IN  = @P0";
-                IDictionary<string, object> parameters = new Dictionary<string, object> {
-                    { "@P0", keyTable }
-                };
+                string cmdStr = $"DELETE FROM {_tablePrefix}{tableName} WHERE {keyName} IN  ({keyParmStr})";
                 var cmd = CreateCommand(cmdStr, parameters, connection);
                 int result = await cmd.ExecuteNonQueryAsync();
                 IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
@@ -601,12 +621,12 @@ namespace DataContext.Relational
             try
             {
                 await connection.OpenAsync();
-                string tableName = Mapper.GetObjectMapName(obj.GetType());
-                string keyName = Mapper.GetKeyMapName(obj.GetType());
+                string tableName = Mapper.GetObjectMapName(typeof(T));
+                string keyName = Mapper.GetKeyMapName(typeof(T));
 
                 string cmdStr = $"DELETE FROM {_tablePrefix}{tableName} WHERE {keyName} = @P0";
-                IDictionary<string, object> parameters = new Dictionary<string, object> {
-                    { "@P0", Mapper.GetKeyValue(obj) }
+                List<KeyValuePair<string, object>> parameters = new List<KeyValuePair<string, object>> {
+                    new KeyValuePair<string, object>( "@P0", Mapper.GetKeyValue(obj))
                 };
                 var cmd = CreateCommand(cmdStr, parameters, connection);
                 int result = await cmd.ExecuteNonQueryAsync();
@@ -644,8 +664,8 @@ namespace DataContext.Relational
                 string keyName = Mapper.GetKeyMapName(typeof(T));
 
                 string cmdStr = $"DELETE FROM {_tablePrefix}{tableName} WHERE {keyName} = @P0";
-                IDictionary<string, object> parameters = new Dictionary<string, object> {
-                    { "@P0", key }
+                List<KeyValuePair<string, object>> parameters = new List<KeyValuePair<string, object>> {
+                    new KeyValuePair<string, object>( "@P0", key)
                 };
                 var cmd = CreateCommand(cmdStr, parameters, connection);
                 int result = await cmd.ExecuteNonQueryAsync();
@@ -678,10 +698,10 @@ namespace DataContext.Relational
             {
                 connection.Open();
                 string tableName = Mapper.GetObjectMapName(typeof(T));
-                
-                IDictionary<string, object> parameters = TransformObjectToParams(obj);
+
+                List<KeyValuePair<string, object>> parameters = TransformObjectToParams(obj);
                 string cmdStr = BuildCommandForInsert(parameters, tableName,0);
-                IDictionary<string, object> sqlParams = TransformToSqlParam(parameters,0);
+                List<KeyValuePair<string, object>> sqlParams = TransformToSqlParam(parameters,0);
                 var cmd = CreateCommand(cmdStr, sqlParams, connection);
                 int result = cmd.ExecuteNonQuery();
                 IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
@@ -715,13 +735,13 @@ namespace DataContext.Relational
                 connection.Open();
                 string tableName = Mapper.GetObjectMapName(typeof(T));
                 StringBuilder cmdStr = new StringBuilder();
-                
-                IDictionary<string, object> combinedSqlParam = new Dictionary<string, object>();
+
+                List<KeyValuePair<string, object>> combinedSqlParam = new List<KeyValuePair<string, object>>();
                 foreach(var obj in objList)
                 {
-                    IDictionary<string, object> parameters = TransformObjectToParams(obj);
+                    List<KeyValuePair<string, object>> parameters = TransformObjectToParams(obj);
                     cmdStr.Append(BuildCommandForInsert(parameters, tableName, combinedSqlParam.Count) + ";\n");
-                    IDictionary<string, object> sqlParams = TransformToSqlParam(parameters, combinedSqlParam.Count);
+                    List<KeyValuePair<string, object>> sqlParams = TransformToSqlParam(parameters, combinedSqlParam.Count);
                     foreach(var param in sqlParams)
                     {
                         combinedSqlParam.Add(param);
@@ -760,13 +780,13 @@ namespace DataContext.Relational
                 await connection.OpenAsync();
                 string tableName = Mapper.GetObjectMapName(typeof(T));
                 StringBuilder cmdStr = new StringBuilder();
-               
-                IDictionary<string, object> combinedSqlParam = new Dictionary<string, object>();
+
+                List<KeyValuePair<string, object>> combinedSqlParam = new List<KeyValuePair<string, object>>();
                 foreach (var obj in objList)
                 {
-                    IDictionary<string, object> parameters = TransformObjectToParams(obj);
+                    List<KeyValuePair<string, object>> parameters = TransformObjectToParams(obj);
                     cmdStr.Append(BuildCommandForInsert(parameters, tableName, combinedSqlParam.Count) + ";\n");
-                    IDictionary<string, object> sqlParams = TransformToSqlParam(parameters, combinedSqlParam.Count);
+                    List<KeyValuePair<string, object>> sqlParams = TransformToSqlParam(parameters, combinedSqlParam.Count);
                     foreach (var param in sqlParams)
                     {
                         combinedSqlParam.Add(param);
@@ -807,9 +827,9 @@ namespace DataContext.Relational
                 await connection.OpenAsync();
                 string tableName = Mapper.GetObjectMapName(typeof(T));
 
-                IDictionary<string, object> parameters = TransformObjectToParams(obj);
+                List<KeyValuePair<string, object>> parameters = TransformObjectToParams(obj);
                 string cmdStr = BuildCommandForInsert(parameters, tableName, 0);
-                IDictionary<string, object> sqlParams = TransformToSqlParam(parameters,0);
+                List<KeyValuePair<string, object>> sqlParams = TransformToSqlParam(parameters,0);
                 var cmd = CreateCommand(cmdStr, sqlParams, connection);
                 int result = await cmd.ExecuteNonQueryAsync();
                 IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
@@ -841,8 +861,13 @@ namespace DataContext.Relational
             try
             {
                 connection.Open();
- 
-                IDictionary<string, object> sqlParams = TransformToSqlParam(parameters,0);
+                List<KeyValuePair<string, object>> parametersLst = new List<KeyValuePair<string, object>>();
+                foreach(var parm in parameters)
+                {
+                    parametersLst.Add(parm);
+                }
+
+                List<KeyValuePair<string, object>> sqlParams = TransformToSqlParam(parametersLst,0);
                 var cmd = CreateCommand(statement, sqlParams, connection);
                 int result = cmd.ExecuteNonQuery();
                 IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
@@ -874,11 +899,13 @@ namespace DataContext.Relational
             try
             {
                 await connection.OpenAsync();
+                List<KeyValuePair<string, object>> parametersLst = new List<KeyValuePair<string, object>>();
+                foreach (var parm in parameters)
+                {
+                    parametersLst.Add(parm);
+                }
 
-
-
-
-                IDictionary<string, object> sqlParams = TransformToSqlParam(parameters,0);
+                List<KeyValuePair<string, object>> sqlParams = TransformToSqlParam(parametersLst,0);
                 var cmd = CreateCommand(statement, sqlParams, connection);
                 int result = await cmd.ExecuteNonQueryAsync();
                 IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
@@ -910,13 +937,18 @@ namespace DataContext.Relational
             try
             {
                 connection.Open();
-
-                IDictionary<string, object> sqlParams = TransformToSqlParam(parameters,0);
+                List<KeyValuePair<string, object>> parametersLst = new List<KeyValuePair<string, object>>();
+                foreach (var parm in parameters)
+                {
+                    parametersLst.Add(parm);
+                }
+                List<KeyValuePair<string, object>> sqlParams = TransformToSqlParam(parametersLst,0);
                 var cmd = CreateCommand(query, sqlParams, connection);
                 var reader = cmd.ExecuteReader();
                 while(reader.Read())
                 {
-                    T record = Mapper.CreateInstanceFromFields<T>(ConvertReaderToKV(reader));
+                    T record = Util.Container.CreateInstance<T>();
+                    record = Mapper.CreateInstanceFromFields(record,ConvertReaderToKV(reader));
                     yield return record;
                 }
             }
@@ -943,8 +975,12 @@ namespace DataContext.Relational
             try
             {
                 connection.Open();
-
-                IDictionary<string, object> sqlParams = TransformToSqlParam(parameters,0);
+                List<KeyValuePair<string, object>> parametersLst = new List<KeyValuePair<string, object>>();
+                foreach (var parm in parameters)
+                {
+                    parametersLst.Add(parm);
+                }
+                List<KeyValuePair<string, object>> sqlParams = TransformToSqlParam(parametersLst,0);
                 var cmd = CreateCommand(query, sqlParams, connection);
                 var reader = cmd.ExecuteReader();
                 while (reader.Read())
@@ -1008,6 +1044,7 @@ namespace DataContext.Relational
         /// <summary>
         /// Retrieves all instances of T from the data source
         /// </summary>
+        /// <param name="orderbyCols">The list of columns to order by</param>
         /// <typeparam name="T"></typeparam>
         /// <returns>An iterator for traversing the returned records</returns>
         public IEnumerable<T> SelectAll<T>()
@@ -1018,13 +1055,12 @@ namespace DataContext.Relational
             try
             {
                 connection.Open();
-
-               
                 var cmd = CreateCommand($"SELECT * FROM {_tablePrefix}{Mapper.GetObjectMapName(typeof(T))}" , null, connection);
                 var reader = cmd.ExecuteReader();
                 while (reader.Read())
                 {
-                    T record = Mapper.CreateInstanceFromFields<T>(ConvertReaderToKV(reader));
+                    T record = Util.Container.CreateInstance<T>();
+                    record = Mapper.CreateInstanceFromFields(record, ConvertReaderToKV(reader));
                     yield return record;
                 }
             }
@@ -1048,16 +1084,18 @@ namespace DataContext.Relational
         }
 
 
+
         /// <summary>
         /// Retrieves all instances of T matching the specified expression
         /// </summary>
         /// <typeparam name="T"></typeparam>
         /// <param name="matcher">Match predicate encoded in an expression</param>
         /// <returns>Matching instances of T</returns>
-        public IEnumerable<T> SelectMatching<T>(Expression<Func<T,bool>> matcher)
+        public IEnumerable<T> SelectMatching<T>(Expression<Func<T, bool>> matcher)
         {
             return from record in SelectAll<T>() where matcher.Compile()(record) select record;
         }
+
 
 
         /// <summary>
@@ -1067,7 +1105,7 @@ namespace DataContext.Relational
         /// <param name="matcher">Match predicate encoded in an expression</param>
         /// <returns>A completion token encapsulating the matching instances of T</returns>
         public Task<IEnumerable<T>> SelectMatchingAsync<T>(Expression<Func<T, bool>> matcher)
-        {
+        { 
             return Task.FromResult(SelectMatching<T>(matcher));
         }
 
@@ -1090,11 +1128,14 @@ namespace DataContext.Relational
                 string tableName = Mapper.GetObjectMapName(typeof(T));
                 string keyName = Mapper.GetKeyMapName(typeof(T));
 
-                var cmd = CreateCommand($"SELECT TOP 1 * FROM {_tablePrefix}{tableName} WHERE {keyName} = @P0", new Dictionary<string, object> { { "@P0",key} }, connection);
+                var cmd = CreateCommand($"SELECT TOP 1 * FROM {_tablePrefix}{tableName} WHERE {keyName} = @P0", new List<KeyValuePair<string, object>> { 
+                    new KeyValuePair<string, object>("@P0",key) } , connection);
                 var reader = cmd.ExecuteReader();
+
                 if (reader.Read())
                 {
-                    T record = Mapper.CreateInstanceFromFields<T>(ConvertReaderToKV(reader));
+                    T record = Util.Container.CreateInstance<T>();
+                    record = Mapper.CreateInstanceFromFields(record, ConvertReaderToKV(reader));
                     return record;
                 }
                 return default(T);
@@ -1126,11 +1167,13 @@ namespace DataContext.Relational
                 string tableName = Mapper.GetObjectMapName(typeof(T));
                 string keyName = Mapper.GetKeyMapName(typeof(T));
 
-                var cmd = CreateCommand($"SELECT TOP 1 * FROM {_tablePrefix}{tableName} WHERE {keyName} = @P0", new Dictionary<string, object> { { "@P0", key } }, connection);
+                var cmd = CreateCommand($"SELECT TOP 1 * FROM {_tablePrefix}{tableName} WHERE {keyName} = @P0", new List<KeyValuePair<string, object>> {
+                    new KeyValuePair<string, object>("@P0",key) }, connection);
                 var reader = await cmd.ExecuteReaderAsync();
                 if (await reader.ReadAsync())
                 {
-                    T record = Mapper.CreateInstanceFromFields<T>(ConvertReaderToKV(reader));
+                    T record = Util.Container.CreateInstance<T>();
+                    record = Mapper.CreateInstanceFromFields(record, ConvertReaderToKV(reader));
                     return record;
                 }
                 return default(T);
@@ -1162,11 +1205,13 @@ namespace DataContext.Relational
                 connection.Open();
 
                 string tableName = Mapper.GetObjectMapName(typeof(T));
-                var cmd = CreateCommand($"SELECT * FROM {_tablePrefix}{tableName} {BuildRangeQueryForProvider(from,length)}", null, connection);
+                string keyName = Mapper.GetKeyMapName(typeof(T));
+                var cmd = CreateCommand($"SELECT * FROM {_tablePrefix}{tableName} {BuildRangeQueryForProvider(from,length,keyName)}", null, connection);
                 var reader = cmd.ExecuteReader();
                 while (reader.Read())
                 {
-                    T record = Mapper.CreateInstanceFromFields<T>(ConvertReaderToKV(reader));
+                    T record = Util.Container.CreateInstance<T>();
+                    record = Mapper.CreateInstanceFromFields(record, ConvertReaderToKV(reader));
                     yield return record;
                 }
             }
@@ -1210,9 +1255,11 @@ namespace DataContext.Relational
 
                 string tableName = Mapper.GetObjectMapName(typeof(T));
                 object key = Mapper.GetKeyValue(obj);
-                IDictionary<string, object> objParam = TransformObjectToParams(obj, updateNulls);
-                IDictionary<string, object> sqlParam = TransformToSqlParam(objParam, 0);
-                var cmd = CreateCommand(BuildCommandForUpdate(objParam,tableName,0), sqlParam, connection);
+                List<KeyValuePair<string, object>> objParam = TransformObjectToParams(obj, updateNulls);
+                SwapKeyForLast<T>(objParam);
+                List<KeyValuePair<string, object>> sqlParam = TransformToSqlParam(objParam, 0);
+                var cmd = CreateCommand(BuildCommandForUpdate(objParam,tableName,0, 
+                    new KeyValuePair<string,object>(Mapper.GetKeyMapName(typeof(T)), key)), sqlParam, connection);
                 int result = cmd.ExecuteNonQuery();
                 IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
                 status.IsSuccess = result > 0;
@@ -1247,12 +1294,14 @@ namespace DataContext.Relational
                 string tableName = Mapper.GetObjectMapName(typeof(T));
                 StringBuilder cmdStr = new StringBuilder();
 
-                IDictionary<string, object> combinedSqlParam = new Dictionary<string, object>();
+                List<KeyValuePair<string, object>> combinedSqlParam = new List<KeyValuePair<string, object>>();
                 foreach (var obj in objList)
                 {
-                    IDictionary<string, object> parameters = TransformObjectToParams(obj,updateNulls);
-                    cmdStr.Append(BuildCommandForUpdate(parameters, tableName, combinedSqlParam.Count) + ";\n");
-                    IDictionary<string, object> sqlParams = TransformToSqlParam(parameters, combinedSqlParam.Count);
+                    List<KeyValuePair<string, object>> parameters = TransformObjectToParams(obj,updateNulls);
+                    SwapKeyForLast<T>(parameters);
+                    cmdStr.Append(BuildCommandForUpdate(parameters, tableName, combinedSqlParam.Count,
+                        new KeyValuePair<string, object>(Mapper.GetKeyMapName(typeof(T)), Mapper.GetKeyValue(obj))) + ";\n");
+                    List<KeyValuePair<string, object>> sqlParams = TransformToSqlParam(parameters, combinedSqlParam.Count);
                     foreach (var param in sqlParams)
                     {
                         combinedSqlParam.Add(param);
@@ -1293,12 +1342,14 @@ namespace DataContext.Relational
                 string tableName = Mapper.GetObjectMapName(typeof(T));
                 StringBuilder cmdStr = new StringBuilder();
 
-                IDictionary<string, object> combinedSqlParam = new Dictionary<string, object>();
+                List<KeyValuePair<string, object>> combinedSqlParam = new List<KeyValuePair<string, object>>();
                 foreach (var obj in objList)
                 {
-                    IDictionary<string, object> parameters = TransformObjectToParams(obj, updateNulls);
-                    cmdStr.Append(BuildCommandForUpdate(parameters, tableName, combinedSqlParam.Count) + ";\n");
-                    IDictionary<string, object> sqlParams = TransformToSqlParam(parameters, combinedSqlParam.Count);
+                    List<KeyValuePair<string, object>> parameters = TransformObjectToParams(obj, updateNulls);
+                    SwapKeyForLast<T>(parameters);
+                    cmdStr.Append(BuildCommandForUpdate(parameters, tableName, combinedSqlParam.Count,
+                        new KeyValuePair<string, object>(Mapper.GetKeyMapName(typeof(T)), Mapper.GetKeyValue(obj))) + ";\n");
+                    List<KeyValuePair<string, object>> sqlParams = TransformToSqlParam(parameters, combinedSqlParam.Count);
                     foreach (var param in sqlParams)
                     {
                         combinedSqlParam.Add(param);
@@ -1341,9 +1392,11 @@ namespace DataContext.Relational
 
                 string tableName = Mapper.GetObjectMapName(typeof(T));
                 object key = Mapper.GetKeyValue(obj);
-                IDictionary<string, object> objParam = TransformObjectToParams(obj, updateNulls);
-                IDictionary<string, object> sqlParam = TransformToSqlParam(objParam, 0);
-                var cmd = CreateCommand(BuildCommandForUpdate(objParam, tableName, 0), sqlParam, connection);
+                List<KeyValuePair<string, object>> objParam = TransformObjectToParams(obj, updateNulls);
+                SwapKeyForLast<T>(objParam);
+                List<KeyValuePair<string, object>> sqlParam = TransformToSqlParam(objParam, 0);
+                var cmd = CreateCommand(BuildCommandForUpdate(objParam, tableName, 0,
+                    new KeyValuePair<string, object>(Mapper.GetKeyMapName(typeof(T)), key)), sqlParam, connection);
                 int result = await cmd.ExecuteNonQueryAsync();
                 IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
                 status.IsSuccess = result > 0;
@@ -1398,6 +1451,54 @@ namespace DataContext.Relational
             Dispose(true);
             // TODO: uncomment the following line if the finalizer is overridden above.
             // GC.SuppressFinalize(this);
+        }
+
+        public int Count<T>()
+        {
+            DbConnection connection = CreateConnection();
+            try
+            {
+                DbCommand command = CreateCommand($"SELECT COUNT(1) FROM {_tablePrefix}{Mapper.GetObjectMapName(typeof(T))}",
+                   null, connection);
+                var reader = command.ExecuteReader();
+                if (reader.Read())
+                {
+                    return Convert.ToInt32(reader[0]);
+                }
+
+            }
+            finally
+            {
+                if(AutoCommit)
+                {
+                    connection.Close();
+                }
+            }
+            return 0;
+        }
+
+        public async Task<int> CountAsync<T>()
+        {
+            DbConnection connection = CreateConnection();
+            try
+            {
+                DbCommand command = CreateCommand($"SELECT COUNT(1) FROM {_tablePrefix}{Mapper.GetObjectMapName(typeof(T))}",
+                   null, connection);
+                var reader = await command.ExecuteReaderAsync();
+                if (await reader.ReadAsync())
+                {
+                    return Convert.ToInt32(reader[0]);
+                }
+
+            }
+            finally
+            {
+                if (AutoCommit)
+                {
+                    connection.Close();
+                }
+            }
+            return 0;
         }
         #endregion
 

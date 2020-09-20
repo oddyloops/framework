@@ -47,5 +47,14 @@ namespace Framework.Interfaces
         /// <returns>A list of created instances</returns>
         IList<T> CreateInstances<T>();
 
+        /// <summary>
+        /// Creates an instance for each implementation of interface T available in the container referenced by the 
+        /// specified contract
+        /// </summary>
+        /// <typeparam name="T">Type of instance to be created</typeparam>
+        /// <param name="contract">Contract name referencing the exact instance of T to be returned</param>
+        /// <returns>A list of created instances</returns>
+        IList<T> CreateInstances<T>(string contract);
+
     }
 }

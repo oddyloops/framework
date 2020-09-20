@@ -728,6 +728,16 @@ namespace DataContext.NoSql.MongoDB
             // TODO: uncomment the following line if the finalizer is overridden above.
             // GC.SuppressFinalize(this);
         }
+
+        public int Count<T>()
+        {
+            throw new NotImplementedException();
+        }
+
+        public Task<int> CountAsync<T>()
+        {
+            throw new NotImplementedException();
+        }
         #endregion
     }
 }

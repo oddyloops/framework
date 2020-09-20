@@ -274,19 +274,17 @@ namespace DataMapperImpl
         }
 
         /// <summary>
-        /// Creates an instance of type T based on field name-value pairs
+        /// Fills an object of type T based on field name-value pairs
         /// </summary>
+        /// <param name="obj">Object</param>
         /// <param name="fields">Key-pairs of each field</param>
         /// <returns>An instance of type T</returns>
-        public T CreateInstanceFromFields<T>(IDictionary<string, object> fields)
+        public T CreateInstanceFromFields<T>(T obj, IDictionary<string, object> fields)
         {
-            T obj = Activator.CreateInstance<T>();
-
             foreach(var field in fields)
             {
                 SetFieldValue(field.Key, field.Value, obj);
             }
-
             return obj;
 
         }

@@ -1,8 +1,8 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
-    <Version>0.0.0</Version>
+    <Version>0.0.9</Version>
     <Description>Collection of required interfaces by further projects</Description>
     <Authors>Adedayo Odesile</Authors>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
