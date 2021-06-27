@@ -15,7 +15,7 @@ namespace Framework.Common.Impl.Services
     /// <summary>
     /// A SFTP implementation of IFileService
     /// </summary>
-    [Export]
+    [Export(typeof(IFileService))]
     public class FileService : IFileService
     {
         private string host;
@@ -23,7 +23,7 @@ namespace Framework.Common.Impl.Services
         private string password;
 
         [ImportingConstructor]
-        public FileService(IConfiguration configReader)
+        public FileService([Import("JsonConfig")]IConfiguration configReader)
         {
             host = configReader.GetValue(ConfigConstants.SFTP_HOST);
             username = configReader.GetValue(ConfigConstants.SFTP_USERNAME);

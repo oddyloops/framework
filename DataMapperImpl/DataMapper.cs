@@ -260,10 +260,15 @@ namespace DataMapperImpl
             PropertyInfo field = GetFieldByName(fieldName, obj.GetType());
             if (field != null)
             {
-                if (value.GetType().Equals(field.PropertyType))
+                if (value.GetType() == typeof(decimal))
+                {
+                    field.SetValue(obj, Convert.ToDouble(value));
+                }
+                else
                 {
                     field.SetValue(obj, value);
                 }
+              
             }
             else
             {

@@ -200,12 +200,12 @@ namespace DataContext.Relational
                     {
                         command.Append(",");
                     }
-                    command.Append($"{param.Key} = @P{paramCount + paramOffset}");
+                    command.Append($"[{param.Key}] = @P{paramCount + paramOffset}");
                     isFirst = false;
                     paramCount++;
                 }
             }
-            command.Append($" WHERE {key.Key} = @P{paramCount + paramOffset};");
+            command.Append($" WHERE [{key.Key}] = @P{paramCount + paramOffset};");
             return command.ToString();
         }
 
@@ -227,7 +227,7 @@ namespace DataContext.Relational
                 {
                     command.Append(",");
                 }
-                command.Append(param.Key);
+                command.Append("[" + param.Key + "]");
                 isFirst = false;
             }
             command.Append(") VALUES (");

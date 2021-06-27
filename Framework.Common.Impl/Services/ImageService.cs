@@ -11,7 +11,7 @@ using System.Text;
 
 namespace Framework.Common.Impl.Services
 {
-    [Export]
+    [Export(typeof(IImageService))]
     public class ImageService : IImageService
     {
         private const int MIN_BIG = 720;
@@ -197,9 +197,9 @@ namespace Framework.Common.Impl.Services
             using(Bitmap generated = new Bitmap((int)Math.Ceiling(0.33 * source.Width),
                 (int)Math.Ceiling(0.33 * source.Height)))
             {
-                for(int y = 1,y2 = 0; y < source.Height; y+=3, y2++)
+                for(int y = 1,y2 = 0; y < source.Height && y2 < generated.Height; y+=3, y2++)
                 {
-                    for(int x = 1,x2=0; x < source.Width; x +=3,x2++)
+                    for(int x = 1,x2=0; x < source.Width && x2 < generated.Width; x +=3,x2++)
                     {
                         generated.SetPixel(x2, y2, source.GetPixel(x, y));
                     }

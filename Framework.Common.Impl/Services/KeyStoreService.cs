@@ -104,28 +104,7 @@ namespace Framrwork.Common.Impl.Services
             File.WriteAllText(storageFile, json);
         }
 
-        /// <summary>
-        /// A helper method for generating RSA asymmetric key in the configured key container if none exists
-        /// </summary>
-        private void CreateAsymKeyIfNotExists()
-        {
-            string assymKeyContainer = Config.GetValue(ConfigConstants.ASYM_KEY_PATH);
-            CspParameters csp = new CspParameters()
-            {
-                KeyContainerName = assymKeyContainer,
-                Flags = CspProviderFlags.UseMachineKeyStore
-            };
-            CspKeyContainerInfo cspKeyContainer = new CspKeyContainerInfo(csp);
-
-            if (!cspKeyContainer.Accessible)
-            {
-                int keySize = int.Parse(Config.GetValue(ConfigConstants.ASYM_KEY_SIZE_BITS));
-                using (RSACryptoServiceProvider rsa = new RSACryptoServiceProvider(keySize, csp))
-                {
-                    rsa.PersistKeyInCsp = true;
-                }
-            }
-        }
+        
 
         /// <summary>
         /// A helper method for encrypting symmetric key to be stored with RSA encryption
@@ -173,6 +152,30 @@ namespace Framrwork.Common.Impl.Services
             }
         }
         #endregion
+
+
+        /// <summary>
+        /// Generates RSA asymmetric key in the configured key container if none exists
+        /// </summary>
+        public void CreateAsymKeyIfNotExists()
+        {
+            string assymKeyContainer = Config.GetValue(ConfigConstants.ASYM_KEY_PATH);
+            CspParameters csp = new CspParameters()
+            {
+                KeyContainerName = assymKeyContainer,
+                Flags = CspProviderFlags.UseMachineKeyStore
+            };
+            CspKeyContainerInfo cspKeyContainer = new CspKeyContainerInfo(csp);
+
+            if (!cspKeyContainer.Accessible)
+            {
+                int keySize = int.Parse(Config.GetValue(ConfigConstants.ASYM_KEY_SIZE_BITS));
+                using (RSACryptoServiceProvider rsa = new RSACryptoServiceProvider(keySize, csp))
+                {
+                    rsa.PersistKeyInCsp = true;
+                }
+            }
+        }
 
         /// <summary>
         /// Adds or replaces symmetric key to the store

@@ -15,7 +15,7 @@ namespace DataContext.NoSql.MongoDB
     /// <summary>
     /// A concrete implementation of the IDataContext interface for mongo DB
     /// </summary>
-    [Export("NoSql.MongoDB",typeof(IDataContext))]
+    [Export("Mongo",typeof(IDataContext))]
     public class MongoDBDataContext : IDataContext
     {
         private string _connectionString;
@@ -39,6 +39,18 @@ namespace DataContext.NoSql.MongoDB
         }
 
         /// <summary>
+        /// Helper method for extracting document collection mapped to type with the MapAttribute
+        /// </summary>
+        /// <typeparam name="T">Type</typeparam>
+        /// <returns>MongoDB document collection object</returns>
+        private IMongoCollection<BsonDocument> GetDocumentCollection<T>()
+        {
+            var db = _client.GetDatabase(DBName);
+            string collectionName = Mapper.GetObjectMapName(typeof(T));
+            return db.GetCollection<BsonDocument>(collectionName);
+        }
+
+        /// <summary>
         /// Helper method for defining a collection filter for a mapped object
         /// </summary>
         /// <typeparam name="T">Object type</typeparam>
@@ -50,18 +62,7 @@ namespace DataContext.NoSql.MongoDB
             return builder.Eq(x => Mapper.GetKeyValue(x).ToString(), Mapper.GetKeyValue(obj).ToString());
         }
 
-        /// <summary>
-        /// Helper method for defining a collection filter based on an object's key attribute
-        /// </summary>
-        /// <typeparam name="T">Object type</typeparam>
-        /// <typeparam name="K">Key type</typeparam>
-        /// <param name="key">Key value</param>
-        /// <returns>A filter predicate matching object's key value</returns>
-        private FilterDefinition<T> BuildFilterDefinitionForObjectKey<T,K>(K key)
-        {
-            var builder = Builders<T>.Filter;
-            return builder.Eq(x => Mapper.GetKeyValue(x).ToString(), key.ToString());
-        }
+       
 
         /// <summary>
         /// Helper method for builing a jsoncommand object from a raw mongo db command string
@@ -84,6 +85,8 @@ namespace DataContext.NoSql.MongoDB
             }
             return new JsonCommand<BsonDocument>(query);
         }
+
+   
         #endregion
 
 
@@ -96,7 +99,6 @@ namespace DataContext.NoSql.MongoDB
         /// <summary>
         /// A reference to a configuration component used to access config settings required by the data provider
         /// </summary>
-        [Import("JsonConfig")]
         public IConfiguration Config { get; set; }
 
         /// <summary>
@@ -113,10 +115,13 @@ namespace DataContext.NoSql.MongoDB
         /// <summary>
         /// Cosntructs an instance of this class based on configuration values
         /// </summary>
-        public MongoDBDataContext()
+        [ImportingConstructor]
+        public MongoDBDataContext([Import("JsonConfig")] IConfiguration config)
         {
+            Config = config;
             DBName = Config.GetValue(ConfigConstants.DEFAULT_MONGODB_DATABASE);
             AutoCommit = Config.GetValue(ConfigConstants.MONGODB_AUTOCOMMIT) == "1";
+            Connect();
         }
 
         /// <summary>
@@ -167,7 +172,7 @@ namespace DataContext.NoSql.MongoDB
         /// <returns>A status indicating result of the operation</returns>
         public IStatus<int> Delete<T>(T obj)
         {
-            var result = GetCollectionForType<T>().DeleteOne(BuildFilterDefinitionForObject(obj));
+            var result = GetDocumentCollection<T>().DeleteOne(new BsonDocument("_id", Mapper.GetKeyValue(obj).ToString()));
             IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
             status.IsSuccess = result.IsAcknowledged;
             status.StatusInfo = (int)result.DeletedCount;
@@ -184,7 +189,7 @@ namespace DataContext.NoSql.MongoDB
         /// <returns>A status indicating result of the operation</returns>
         public IStatus<int> Delete<T, K>(K key)
         {
-            var result = GetCollectionForType<T>().DeleteOne(BuildFilterDefinitionForObjectKey<T,K>(key));
+            var result = GetDocumentCollection<T>().DeleteOne(new BsonDocument("_id", key.ToString()));
             IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
             status.IsSuccess = result.IsAcknowledged;
             status.StatusInfo = (int)result.DeletedCount;
@@ -277,7 +282,7 @@ namespace DataContext.NoSql.MongoDB
         /// <returns>A completion token encapsulating the status indicating the result of the operation</returns>
         public async Task<IStatus<int>> DeleteAsync<T>(T obj)
         {
-            var result = await GetCollectionForType<T>().DeleteOneAsync(BuildFilterDefinitionForObject(obj));
+            var result = await GetDocumentCollection<T>().DeleteOneAsync(new BsonDocument("_id",Mapper.GetKeyValue(obj).ToString()));
             IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
             status.IsSuccess = result.IsAcknowledged;
             status.StatusInfo = (int)result.DeletedCount;
@@ -294,7 +299,7 @@ namespace DataContext.NoSql.MongoDB
         /// <returns>A completion token encapsulating the status indicating the result of the operation</returns>
         public async Task<IStatus<int>> DeleteAsync<T, K>(K key)
         {
-            var result = await GetCollectionForType<T>().DeleteOneAsync(BuildFilterDefinitionForObjectKey<T, K>(key));
+            var result = await GetDocumentCollection<T>().DeleteOneAsync(new BsonDocument("_id", key.ToString()));
             IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
             status.IsSuccess = result.IsAcknowledged;
             status.StatusInfo = (int)result.DeletedCount;
@@ -514,9 +519,10 @@ namespace DataContext.NoSql.MongoDB
         /// <typeparam name="T"></typeparam>
         /// <param name="matcher">Match predicate encoded in an expression</param>
         /// <returns>A completion token encapsulating the matching instances of T</returns>
-        public Task<IEnumerable<T>> SelectMatchingAsync<T>(Expression<Func<T, bool>> matcher)
+        public async Task<IEnumerable<T>> SelectMatchingAsync<T>(Expression<Func<T, bool>> matcher)
         {
-            return Task.FromResult(SelectMatching(matcher));
+            var collection = GetCollectionForType<T>();
+            return (await collection.FindAsync(matcher)).ToEnumerable();
         }
 
 
@@ -529,7 +535,9 @@ namespace DataContext.NoSql.MongoDB
         /// <returns>The record matching the key</returns>
         public T SelectOne<T, K>(K key)
         {
-            return (from x in SelectAll<T>() where Mapper.GetKeyValue(x).ToString().Equals(key.ToString()) select x).First();
+            var collection = GetDocumentCollection<T>();
+            var result = collection.Find(new BsonDocument ( "_id", key.ToString())).FirstOrDefault();
+            return result == null ? default : BsonSerializer.Deserialize<T>(result);
         }
 
 
@@ -540,9 +548,11 @@ namespace DataContext.NoSql.MongoDB
         /// <typeparam name="K">Key type</typeparam>
         /// <param name="key">Key corresponding to the retrieved record</param>
         /// <returns>A completion token encapsulating the record matching the key</returns>
-        public Task<T> SelectOneAsync<T, K>(K key)
+        public async Task<T> SelectOneAsync<T, K>(K key)
         {
-            return Task.FromResult(SelectOne<T,K>(key));
+            var collection = GetDocumentCollection<T>();
+            var result = (await collection.FindAsync(new BsonDocument("_id", key.ToString()))).FirstOrDefault();
+            return result == null ? default : BsonSerializer.Deserialize<T>(result);
         }
 
 
@@ -581,11 +591,11 @@ namespace DataContext.NoSql.MongoDB
         /// <returns>A status indicating result of the operation</returns>
         public IStatus<int> Update<T>(T obj, bool updateNulls = false)
         {
-            var collection = GetCollectionForType<T>();
+            var collection = GetDocumentCollection<T>();
             string keyString = Mapper.GetKeyValue(obj).ToString();
             T record = SelectOne<T,string>(keyString);
             Util.DeepCopy(obj, record, !updateNulls, Mapper.GetKeyName(typeof(T)));
-            var result = collection.ReplaceOne(BuildFilterDefinitionForObjectKey<T, string>(keyString), record);
+            var result = collection.ReplaceOne(new BsonDocument("_id", keyString), record.ToBsonDocument());
             IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
             status.IsSuccess = result.IsAcknowledged;
             status.StatusInfo = (int)result.ModifiedCount;
@@ -620,7 +630,7 @@ namespace DataContext.NoSql.MongoDB
             for(int i =0; i < keyList.Count;i++)
             {
                 Util.DeepCopy(objList[i], recordMap[keyList[i]], !updateNulls, keyName);
-                var result = collection.ReplaceOne(BuildFilterDefinitionForObjectKey<T, string>(keyList[i]), recordMap[keyList[i]] );
+                var result = collection.ReplaceOne(x => Mapper.GetKeyValue(x).ToString() == keyList[i], recordMap[keyList[i]] );
                 if(result.IsAcknowledged)
                 {
                     updateCount++;
@@ -661,7 +671,7 @@ namespace DataContext.NoSql.MongoDB
             for (int i = 0; i < keyList.Count; i++)
             {
                 Util.DeepCopy(objList[i], recordMap[keyList[i]], !updateNulls, keyName);
-                var result =await  collection.ReplaceOneAsync(BuildFilterDefinitionForObjectKey<T, string>(keyList[i]), recordMap[keyList[i]]);
+                var result =await  collection.ReplaceOneAsync(x => Mapper.GetKeyValue(x).ToString() == keyList[i], recordMap[keyList[i]]);
                 if (result.IsAcknowledged)
                 {
                     updateCount++;
@@ -684,11 +694,11 @@ namespace DataContext.NoSql.MongoDB
         /// <returns>A completion token encapsulating the status indicating the result of the operation</returns>
         public async Task<IStatus<int>> UpdateAsync<T>(T obj, bool updateNulls = false)
         {
-            var collection = GetCollectionForType<T>();
+            var collection = GetDocumentCollection<T>();
             string keyString = Mapper.GetKeyValue(obj).ToString();
             T record = await SelectOneAsync<T, string>(keyString);
             Util.DeepCopy(obj, record, !updateNulls, Mapper.GetKeyName(typeof(T)));
-            var result = await collection.ReplaceOneAsync(BuildFilterDefinitionForObjectKey<T, string>(keyString), record);
+            var result = await collection.ReplaceOneAsync(new BsonDocument("_id", keyString), record.ToBsonDocument());
             IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
             status.IsSuccess = result.IsAcknowledged;
             status.StatusInfo = (int)result.ModifiedCount;

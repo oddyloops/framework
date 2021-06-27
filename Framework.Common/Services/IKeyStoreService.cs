@@ -14,6 +14,12 @@ namespace Framework.Common.Services
         IConfiguration Config { get; set; }
 
         /// <summary>
+        /// Creates an asymmetric key in the operating system's
+        /// keys store if none exists
+        /// </summary>
+        void CreateAsymKeyIfNotExists();
+
+        /// <summary>
         /// Adds or replaces symmetric key to the store
         /// </summary>
         /// <param name="index">Index for identifying the key</param>

@@ -37,6 +37,13 @@ namespace Framework.Utils
                     }
                 }
 
+                if(property.GetValue(dto) == null)
+                {
+                    //passed required test and is null 
+                    //meaning object was not required
+                    //and wasn't set
+                    return result;
+                }
                 LengthAttribute length = property.GetCustomAttribute<LengthAttribute>(true);
                 if(length != null)
                 {

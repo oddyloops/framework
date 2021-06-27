@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Text;
 using System.Diagnostics;
 using Framework.Utils;
+using Newtonsoft.Json;
 
 namespace Logger.MSImpl
 {
@@ -30,6 +31,7 @@ namespace Logger.MSImpl
         /// List of listeners for this logger
         /// </summary>
         public IList<ILogListener> LogListeners { get; set; }
+        public Type ClassType { get; set; }
 
 
         #region Message
@@ -79,6 +81,25 @@ namespace Logger.MSImpl
             LogListeners = Util.Container.CreateInstances<ILogListener>();
         }
 
+        /// <summary>
+        /// Helper method for writing log message to listener
+        /// </summary>
+        /// <param name="message"></param>
+        /// <param name="tag"></param>
+        /// <param name="level"></param>
+
+        private void LogWriter(string message,string tag,LogLevels level)
+        {
+            StackTrace stackTrace = new StackTrace();
+            string caller = stackTrace.GetFrame(2).GetMethod().Name;
+            foreach (var listener in LogListeners)
+            {
+                if (((int)listener.LogLevel) <= ((int)level))
+                {
+                    listener.Write(tag + ": " + BuildLogString(message, caller));
+                }
+            }
+        }
 
         /// <summary>
         /// Logs debug messages
@@ -86,15 +107,7 @@ namespace Logger.MSImpl
         /// <param name="message">Log message</param>
         public void Debug(string message)
         {
-            StackTrace stackTrace = new StackTrace();
-            string caller = stackTrace.GetFrame(1).GetMethod().Name;
-            foreach(var listener in LogListeners)
-            {
-                if (((int)listener.LogLevel) >= ((int)LogLevels.Debug))
-                {
-                    listener.Write("DBG: " + BuildLogString(message,caller));
-                }
-            }
+            LogWriter(message, "DBG", LogLevels.Debug);
         }
 
         /// <summary>
@@ -103,15 +116,7 @@ namespace Logger.MSImpl
         /// <param name="messageObj">Object encapsulating log message</param>
         public void Debug(object messageObj)
         {
-            StackTrace stackTrace = new StackTrace();
-            string caller = stackTrace.GetFrame(1).GetMethod().Name;
-            foreach (var listener in LogListeners)
-            {
-                if (((int)listener.LogLevel) >= ((int)LogLevels.Debug))
-                {
-                    listener.Write("DBG: " + BuildLogString(messageObj.ToString(), caller));
-                }
-            }
+            LogWriter(JsonConvert.SerializeObject(messageObj), "DBG", LogLevels.Debug);
         }
 
         /// <summary>
@@ -120,15 +125,7 @@ namespace Logger.MSImpl
         /// <param name="message">Log message</param>
         public void Error(string message)
         {
-            StackTrace stackTrace = new StackTrace();
-            string caller = stackTrace.GetFrame(1).GetMethod().Name;
-            foreach (var listener in LogListeners)
-            {
-                if (((int)listener.LogLevel) <= ((int)LogLevels.Error))
-                {
-                    listener.Write("ERR: " + BuildLogString(message, caller));
-                }
-            }
+            LogWriter(message, "ERR", LogLevels.Error);
         }
 
 
@@ -138,15 +135,7 @@ namespace Logger.MSImpl
         /// <param name="messageObj">Object encapsulating log message</param>
         public void Error(object messageObj)
         {
-            StackTrace stackTrace = new StackTrace();
-            string caller = stackTrace.GetFrame(1).GetMethod().Name;
-            foreach (var listener in LogListeners)
-            {
-                if (((int)listener.LogLevel) <= ((int)LogLevels.Error))
-                {
-                    listener.Write("ERR: " + BuildLogString(messageObj.ToString(), caller));
-                }
-            }
+            LogWriter(JsonConvert.SerializeObject(messageObj), "ERR", LogLevels.Error);
         }
 
         /// <summary>
@@ -155,15 +144,7 @@ namespace Logger.MSImpl
         /// <param name="message">Log message</param>
         public void Fatal(string message)
         {
-            StackTrace stackTrace = new StackTrace();
-            string caller = stackTrace.GetFrame(1).GetMethod().Name;
-            foreach (var listener in LogListeners)
-            {
-                if (((int)listener.LogLevel) <= ((int)LogLevels.Fatal))
-                {
-                    listener.Write("FTL: " + BuildLogString(message, caller));
-                }
-            }
+            LogWriter(message, "FTL", LogLevels.Fatal);
         }
 
         /// <summary>
@@ -172,15 +153,7 @@ namespace Logger.MSImpl
         /// <param name="messageObj">Object encapsulating log message</param>
         public void Fatal(object messageObj)
         {
-            StackTrace stackTrace = new StackTrace();
-            string caller = stackTrace.GetFrame(1).GetMethod().Name;
-            foreach (var listener in LogListeners)
-            {
-                if (((int)listener.LogLevel) <= ((int)LogLevels.Fatal))
-                {
-                    listener.Write("FTL: " + BuildLogString(messageObj.ToString(), caller));
-                }
-            }
+            LogWriter(JsonConvert.SerializeObject(messageObj), "FTL", LogLevels.Fatal);
         }
 
 
@@ -190,15 +163,7 @@ namespace Logger.MSImpl
         /// <param name="message">Log message</param>
         public void Info(string message)
         {
-            StackTrace stackTrace = new StackTrace();
-            string caller = stackTrace.GetFrame(1).GetMethod().Name;
-            foreach (var listener in LogListeners)
-            {
-                if (((int)listener.LogLevel) <= ((int)LogLevels.Info))
-                {
-                    listener.Write("INF: " + BuildLogString(message, caller));
-                }
-            }
+            LogWriter(message, "INF", LogLevels.Info);
         }
 
         /// <summary>
@@ -207,15 +172,7 @@ namespace Logger.MSImpl
         /// <param name="messageObj">Object encapsulating log message</param>
         public void Info(object messageObj)
         {
-            StackTrace stackTrace = new StackTrace();
-            string caller = stackTrace.GetFrame(1).GetMethod().Name;
-            foreach (var listener in LogListeners)
-            {
-                if (((int)listener.LogLevel) <= ((int)LogLevels.Info))
-                {
-                    listener.Write("INF: " + BuildLogString(messageObj.ToString(), caller));
-                }
-            }
+            LogWriter(JsonConvert.SerializeObject(messageObj), "INF", LogLevels.Info);
         }
 
         /// <summary>
@@ -243,7 +200,7 @@ namespace Logger.MSImpl
             string caller = stackTrace.GetFrame(1).GetMethod().Name;
             foreach (var listener in LogListeners)
             {
-                listener.Write("LOG: " + BuildLogString(messageObj.ToString(), caller));
+                listener.Write("LOG: " + BuildLogString(JsonConvert.SerializeObject(messageObj), caller));
 
             }
         }
@@ -255,15 +212,7 @@ namespace Logger.MSImpl
         /// <param name="message">Log message</param>
         public void Warn(string message)
         {
-            StackTrace stackTrace = new StackTrace();
-            string caller = stackTrace.GetFrame(1).GetMethod().Name;
-            foreach (var listener in LogListeners)
-            {
-                if (((int)listener.LogLevel) <= ((int)LogLevels.Warn))
-                {
-                    listener.Write("WRN: " + BuildLogString(message, caller));
-                }
-            }
+            LogWriter(message, "WRN", LogLevels.Warn);
         }
 
         /// <summary>
@@ -272,15 +221,17 @@ namespace Logger.MSImpl
         /// <param name="messageObj">Object encapsulating log message</param>
         public void Warn(object messageObj)
         {
-            StackTrace stackTrace = new StackTrace();
-            string caller = stackTrace.GetFrame(1).GetMethod().Name;
-            foreach (var listener in LogListeners)
-            {
-                if (((int)listener.LogLevel) <= ((int)LogLevels.Warn))
-                {
-                    listener.Write("WRN: " + BuildLogString(messageObj.ToString(), caller));
-                }
-            }
+            LogWriter(JsonConvert.SerializeObject(messageObj), "WRN", LogLevels.Warn);
+        }
+
+        public void Trace(string message)
+        {
+            LogWriter(message, "TRC", LogLevels.Trace);
+        }
+
+        public void Trace(object messageObj)
+        {
+            LogWriter(JsonConvert.SerializeObject(messageObj), "TRC", LogLevels.Trace);
         }
     }
 }

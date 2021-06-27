@@ -18,6 +18,7 @@ namespace Logger.MSImpl
         private const uint DEFAULT_ROLL_SIZE = 1024 * 1024; // 1MB
         private uint _currRollFileSize;
         private string _currFile;
+        private FileStream _currFileStr;
 
         /// <summary>
         /// A reference to a configuration component used to access config settings required by the listener
@@ -39,7 +40,7 @@ namespace Logger.MSImpl
         {
             string path = $"{_logPath}\\{_filePrefix}";
 
-            if(_isRolling)
+            if (_isRolling)
             {
                 path = $"{path}{DateTime.Now.ToString("yyyyMMdd-hhmmss")}.log";
                 File.Create(path).Close();
@@ -48,13 +49,19 @@ namespace Logger.MSImpl
             else
             {
                 path = $"{path}.log";
-                if(!File.Exists(path))
+                if (!File.Exists(path))
                 {
                     File.Create(path).Close();
                 }
             }
 
             _currFile = path;
+
+            if (_currFileStr != null)
+            {
+                _currFileStr.Close();
+                _currFileStr = File.OpenWrite(_currFile);
+            }
         }
         #endregion
 
@@ -92,7 +99,7 @@ namespace Logger.MSImpl
 
             CreateNewLogFile();
 
-            
+
         }
 
         /// <summary>
@@ -101,21 +108,18 @@ namespace Logger.MSImpl
         /// <param name="message">Log message</param>
         public void Write(string message)
         {
-            using (FileStream fs = File.OpenWrite(_currFile))
+            byte[] messageBytes = Encoding.UTF8.GetBytes(message);
+            _currFileStr.Write(messageBytes, 0, messageBytes.Length);
+            if (_isRolling)
             {
-                byte[] messageBytes = Encoding.UTF8.GetBytes(message);
-                fs.Seek(0, SeekOrigin.End);
-                fs.Write(messageBytes, 0, messageBytes.Length);
-                if (_isRolling)
-                {
-                    _currRollFileSize += (uint)fs.Length;
+                _currRollFileSize += (uint)messageBytes.Length;
 
-                    if (_currRollFileSize >= _maxRollingSizeBytes)
-                    {
-                        CreateNewLogFile();
-                    }
+                if (_currRollFileSize >= _maxRollingSizeBytes)
+                {
+                    CreateNewLogFile();
                 }
             }
+
         }
     }
 }

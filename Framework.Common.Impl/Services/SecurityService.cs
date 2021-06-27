@@ -24,6 +24,9 @@ namespace Framework.Common.Impl.Services
         [Import("JsonConfig")]
         public IConfiguration Config { get; set; }
 
+        [Import]
+        public IKeyStoreService KeyStore { get; set; }
+
 
         #region HelperMethods
         /// <summary>
@@ -46,6 +49,7 @@ namespace Framework.Common.Impl.Services
 
             return aes;
         }
+
         #endregion
 
         /// <summary>
@@ -223,6 +227,49 @@ namespace Framework.Common.Impl.Services
             return saltedMessage;
         }
 
+        /// <summary>
+        /// Creates a digital signature for the input data
+        /// using a SHA 256 hashing implementation
+        /// </summary>
+        /// <param name="input">Input data</param>
+        /// <returns>Digital signature</returns>
+        public byte[] CreateDigitalSignature(byte[] input)
+        {
+            KeyStore.CreateAsymKeyIfNotExists();
+            string assymKeyContainer = Config.GetValue(ConfigConstants.ASYM_KEY_PATH);
+            CspParameters csp = new CspParameters() { KeyContainerName = assymKeyContainer };
+            using(RSACryptoServiceProvider rsa = new RSACryptoServiceProvider(csp))
+            {
+                return rsa.SignData(input, SHA256.Create());
+            }
+        }
 
+
+        /// <summary>
+        /// Checks the authenticity and integrity of input data
+        /// using SHA 256 for hashing
+        /// </summary>
+        /// <param name="input">Input data</param>
+        /// <param name="signature">Digital signature</param>
+        /// <returns>Is data valid?</returns>
+        public bool VerifyDigitalSignature(byte[] input, byte[] signature)
+        {
+            string assymKeyContainer = Config.GetValue(ConfigConstants.ASYM_KEY_PATH);
+            CspParameters csp = new CspParameters() { KeyContainerName = assymKeyContainer };
+            using (RSACryptoServiceProvider rsa = new RSACryptoServiceProvider(csp))
+            {
+                return rsa.VerifyData(input,SHA256.Create(),signature);
+            }
+        }
+
+        public bool VerifyDigitalSignature(byte[] input, byte[] signature, byte[] publicKey)
+        {
+            int asymKeySize = int.Parse(Config.GetValue(ConfigConstants.ASYM_KEY_SIZE_BITS));
+            using(RSACryptoServiceProvider rsa = new RSACryptoServiceProvider(asymKeySize))
+            {
+                rsa.ImportCspBlob(publicKey);
+                return rsa.VerifyData(input, SHA256.Create(), signature);
+            }
+        }
     }
 }

@@ -17,6 +17,11 @@ namespace Framework.Interfaces
         IConfiguration Config { get; set; }
 
         /// <summary>
+        /// Type of class consuming logger
+        /// </summary>
+        Type ClassType { get; set; }
+
+        /// <summary>
         /// List of listeners for this logger
         /// </summary>
         IList<ILogListener> LogListeners { get; set; }
@@ -85,6 +90,18 @@ namespace Framework.Interfaces
         /// </summary>
         /// <param name="messageObj">Object encapsulating log message</param>
         void Fatal(object messageObj);
+
+        /// <summary>
+        /// Logs trace messages
+        /// </summary>
+        /// <param name="message">Message string</param>
+        void Trace(string message);
+
+        /// <summary>
+        /// Logs trace messages
+        /// </summary>
+        /// <param name="messageObj">Object encapsulating log message</param>
+        void Trace(object messageObj);
 
         /// <summary>
         /// Logs message regardless of log level
