@@ -21,7 +21,7 @@ namespace Framework.Common.Impl.Services
         /// <summary>
         /// A reference to the configuration component for accessing setting values
         /// </summary>
-        [Import("JsonConfig")]
+        [Import("Env")]
         public IConfiguration Config { get; set; }
 
         [Import]

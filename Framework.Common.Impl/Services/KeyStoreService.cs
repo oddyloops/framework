@@ -61,7 +61,7 @@ namespace Framrwork.Common.Impl.Services
         /// <summary>
         /// A reference to the configuration handle for accessing setting values
         /// </summary>
-        [Import("JsonConfig")]
+        [Import("Env")]
         public IConfiguration Config { get; set; }
 
 

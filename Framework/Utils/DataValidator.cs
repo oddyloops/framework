@@ -44,6 +44,16 @@ namespace Framework.Utils
                     //and wasn't set
                     return result;
                 }
+
+                NumberAttribute number = property.GetCustomAttribute<NumberAttribute>(true);
+                if(number != null)
+                {
+                    result = ValidateIsNumber(dto, property, number);
+                    if(!result.Key)
+                    {
+                        break;
+                    }
+                }
                 LengthAttribute length = property.GetCustomAttribute<LengthAttribute>(true);
                 if(length != null)
                 {
@@ -90,7 +100,7 @@ namespace Framework.Utils
             string reason = PASSED;
             if(field.PropertyType == typeof(string))
             {
-                passed = !string.IsNullOrEmpty(value.ToString());
+                passed = value != null && !string.IsNullOrEmpty(value.ToString());
             }
             else
             {
@@ -118,6 +128,18 @@ namespace Framework.Utils
             {
                 passed = false;
                 reason = $"Field {field.Name} of length {value.Length} is shorter than the minimum allowed length of {attrib.MinLength}";
+            }
+            return new KeyValuePair<bool, string>(passed, reason);
+        }
+
+        private static KeyValuePair<bool,string> ValidateIsNumber(object dto,PropertyInfo field, NumberAttribute attrib)
+        {
+            string value = field.GetValue(dto).ToString();
+            string reason = PASSED;
+            bool passed = double.TryParse(value, out _);
+            if (!passed)
+            {
+                reason = $"Field {field.Name} with value {value} is not a valid numeric format";
             }
             return new KeyValuePair<bool, string>(passed, reason);
         }

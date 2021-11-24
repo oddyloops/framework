@@ -121,8 +121,9 @@ namespace DataContext.NoSql.MongoDB
             Config = config;
             DBName = Config.GetValue(ConfigConstants.DEFAULT_MONGODB_DATABASE);
             AutoCommit = Config.GetValue(ConfigConstants.MONGODB_AUTOCOMMIT) == "1";
-            Connect();
+            
         }
+
 
         /// <summary>
         /// Commits data transaction to data source if applicable
@@ -137,13 +138,16 @@ namespace DataContext.NoSql.MongoDB
             }
         }
 
+
         /// <summary>
         /// Connects data provider to its source
         /// </summary>
-        public void Connect()
+        public virtual void Connect()
         {
-            Connect(Config.GetValue(ConfigConstants.MONGODB_CONNECTION_STRING));
-            
+            if (_client == null)
+            {
+                Connect(Config.GetValue(ConfigConstants.MONGODB_CONNECTION_STRING));
+            }
         }
 
 
@@ -151,13 +155,16 @@ namespace DataContext.NoSql.MongoDB
         /// Connects data provider to its source addressed by supplied connection string
         /// </summary>
         /// <param name="str">Connection string</param>
-        public void Connect(string str)
+        public virtual void Connect(string str)
         {
-            _connectionString = str;
-            _client = new MongoClient(_connectionString);
-            if(!AutoCommit)
+            if (_client == null)
             {
-                _transSession = _client.StartSession();
+                _connectionString = str;
+                _client = new MongoClient(_connectionString);
+                if (!AutoCommit)
+                {
+                    _transSession = _client.StartSession();
+                }
             }
             
            
@@ -172,6 +179,7 @@ namespace DataContext.NoSql.MongoDB
         /// <returns>A status indicating result of the operation</returns>
         public IStatus<int> Delete<T>(T obj)
         {
+            Connect();
             var result = GetDocumentCollection<T>().DeleteOne(new BsonDocument("_id", Mapper.GetKeyValue(obj).ToString()));
             IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
             status.IsSuccess = result.IsAcknowledged;
@@ -189,6 +197,7 @@ namespace DataContext.NoSql.MongoDB
         /// <returns>A status indicating result of the operation</returns>
         public IStatus<int> Delete<T, K>(K key)
         {
+            Connect();
             var result = GetDocumentCollection<T>().DeleteOne(new BsonDocument("_id", key.ToString()));
             IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
             status.IsSuccess = result.IsAcknowledged;
@@ -205,6 +214,7 @@ namespace DataContext.NoSql.MongoDB
         /// <returns>A status indicating result of the operation</returns>
         public IStatus<int> DeleteAll<T>(IList<T> objList)
         {
+            Connect();
             IList<string> keyList = new List<string>(objList.Count);
 
             foreach(T obj in objList)
@@ -227,6 +237,7 @@ namespace DataContext.NoSql.MongoDB
         /// <returns>A status indicating result of the operation</returns>
         public IStatus<int> DeleteAll<T, K>(IList<K> keyList)
         {
+            Connect();
             var result = GetCollectionForType<T>().DeleteMany<T>(x => keyList.Contains((K)Mapper.GetKeyValue(x)));
             IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
             status.IsSuccess = result.IsAcknowledged;
@@ -243,6 +254,7 @@ namespace DataContext.NoSql.MongoDB
         /// <returns>A completion token encapsulating the status indicating the result of the operation</returns>
         public async Task<IStatus<int>> DeleteAllAsync<T>(IList<T> objList)
         {
+            Connect();
             IList<string> keyList = new List<string>(objList.Count);
 
             foreach(T obj in objList)
@@ -266,6 +278,7 @@ namespace DataContext.NoSql.MongoDB
         /// <returns>A completion token encapsulating the status indicating the result of the operation</returns>
         public async Task<IStatus<int>> DeleteAllAsync<T, K>(IList<K> keyList)
         {
+            Connect();
             var result =await GetCollectionForType<T>().DeleteManyAsync<T>(x => keyList.Contains((K)Mapper.GetKeyValue(x)));
             IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
             status.IsSuccess = result.IsAcknowledged;
@@ -282,6 +295,7 @@ namespace DataContext.NoSql.MongoDB
         /// <returns>A completion token encapsulating the status indicating the result of the operation</returns>
         public async Task<IStatus<int>> DeleteAsync<T>(T obj)
         {
+            Connect();
             var result = await GetDocumentCollection<T>().DeleteOneAsync(new BsonDocument("_id",Mapper.GetKeyValue(obj).ToString()));
             IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
             status.IsSuccess = result.IsAcknowledged;
@@ -299,6 +313,7 @@ namespace DataContext.NoSql.MongoDB
         /// <returns>A completion token encapsulating the status indicating the result of the operation</returns>
         public async Task<IStatus<int>> DeleteAsync<T, K>(K key)
         {
+            Connect();
             var result = await GetDocumentCollection<T>().DeleteOneAsync(new BsonDocument("_id", key.ToString()));
             IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
             status.IsSuccess = result.IsAcknowledged;
@@ -315,6 +330,7 @@ namespace DataContext.NoSql.MongoDB
         /// <returns>A status indicating result of the operation</returns>
         public IStatus<int> Insert<T>(T obj)
         {
+            Connect();
             var collection = GetCollectionForType<T>();
             collection.InsertOne(obj);
             IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
@@ -332,6 +348,7 @@ namespace DataContext.NoSql.MongoDB
         /// <returns>A status indicating result of the operation</returns>
         public IStatus<int> InsertAll<T>(IList<T> objList)
         {
+            Connect();
             var collection = GetCollectionForType<T>();
             collection.InsertMany(objList);
             IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
@@ -349,6 +366,7 @@ namespace DataContext.NoSql.MongoDB
         /// <returns>A completion token encapsulating the status indicating the result of the operation</returns>
         public async Task<IStatus<int>> InsertAllAsync<T>(IList<T> objList)
         {
+            Connect();
             var collection = GetCollectionForType<T>();
             await collection.InsertManyAsync(objList);
             IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
@@ -366,6 +384,7 @@ namespace DataContext.NoSql.MongoDB
         /// <returns>A completion token encapsulating the status indicating the result of the operation</returns>
         public async Task<IStatus<int>> InsertAsync<T>(T obj)
         {
+            Connect();
             var collection = GetCollectionForType<T>();
             await collection.InsertOneAsync(obj);
             IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
@@ -383,6 +402,7 @@ namespace DataContext.NoSql.MongoDB
         /// <returns>A status indicating the result of the operation</returns>
         public IStatus<int> NonQuery(string statement, IDictionary<string, object> parameters)
         {
+            Connect();
             var result = _client.GetDatabase(DBName).RunCommand(BuildCommandObject(statement, parameters));
             IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
             status.IsSuccess = true;
@@ -399,6 +419,7 @@ namespace DataContext.NoSql.MongoDB
         /// <returns>A completion token encapsulating status indicating the result of the operation</returns>
         public async Task<IStatus<int>> NonQueryAsync(string statement, IDictionary<string, object> parameters)
         {
+            Connect();
             var result = await _client.GetDatabase(DBName).RunCommandAsync(BuildCommandObject(statement, parameters));
             IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
             status.IsSuccess = true;
@@ -416,6 +437,7 @@ namespace DataContext.NoSql.MongoDB
         /// <returns>Matching instances of T</returns>
         public IEnumerable<T> Query<T>(string query, IDictionary<string, object> parameters)
         {
+            Connect();
             var result = _client.GetDatabase(DBName).RunCommand(BuildCommandObject(query, parameters));
             foreach(var item in result.AsBsonArray)
             {
@@ -432,6 +454,7 @@ namespace DataContext.NoSql.MongoDB
         /// <returns>Query results with each record's fields encoded as a series of key-value pairs</returns>
         public IEnumerable<IDictionary<string, object>> Query(string query, IDictionary<string, object> parameters)
         {
+            Connect();
             var result = _client.GetDatabase(DBName).RunCommand(BuildCommandObject(query, parameters));
             foreach (var item in result.AsBsonArray)
             {
@@ -485,6 +508,7 @@ namespace DataContext.NoSql.MongoDB
         /// <returns>An iterator for traversing the returned records</returns>
         public IEnumerable<T> SelectAll<T>()
         {
+            Connect();
             var collection = GetCollectionForType<T>();
             return collection.AsQueryable();
         }
@@ -509,6 +533,7 @@ namespace DataContext.NoSql.MongoDB
         /// <returns>Matching instances of T</returns>
         public IEnumerable<T> SelectMatching<T>(Expression<Func<T, bool>> matcher)
         {
+            Connect();
             return (from x in SelectAll<T>() where matcher.Compile()(x) select x);
         }
 
@@ -521,6 +546,7 @@ namespace DataContext.NoSql.MongoDB
         /// <returns>A completion token encapsulating the matching instances of T</returns>
         public async Task<IEnumerable<T>> SelectMatchingAsync<T>(Expression<Func<T, bool>> matcher)
         {
+            Connect();
             var collection = GetCollectionForType<T>();
             return (await collection.FindAsync(matcher)).ToEnumerable();
         }
@@ -535,6 +561,7 @@ namespace DataContext.NoSql.MongoDB
         /// <returns>The record matching the key</returns>
         public T SelectOne<T, K>(K key)
         {
+            Connect();
             var collection = GetDocumentCollection<T>();
             var result = collection.Find(new BsonDocument ( "_id", key.ToString())).FirstOrDefault();
             return result == null ? default : BsonSerializer.Deserialize<T>(result);
@@ -550,6 +577,7 @@ namespace DataContext.NoSql.MongoDB
         /// <returns>A completion token encapsulating the record matching the key</returns>
         public async Task<T> SelectOneAsync<T, K>(K key)
         {
+            Connect();
             var collection = GetDocumentCollection<T>();
             var result = (await collection.FindAsync(new BsonDocument("_id", key.ToString()))).FirstOrDefault();
             return result == null ? default : BsonSerializer.Deserialize<T>(result);
@@ -591,6 +619,7 @@ namespace DataContext.NoSql.MongoDB
         /// <returns>A status indicating result of the operation</returns>
         public IStatus<int> Update<T>(T obj, bool updateNulls = false)
         {
+            Connect();
             var collection = GetDocumentCollection<T>();
             string keyString = Mapper.GetKeyValue(obj).ToString();
             T record = SelectOne<T,string>(keyString);
@@ -612,6 +641,7 @@ namespace DataContext.NoSql.MongoDB
         /// <returns>A status indicating result of the operation</returns>
         public IStatus<int> UpdateAll<T>(IList<T> objList, bool updateNulls = false)
         {
+            Connect();
             var collection = GetCollectionForType<T>();
             IList<string> keyList = new List<string>(objList.Count);
 
@@ -653,6 +683,7 @@ namespace DataContext.NoSql.MongoDB
         /// <returns>A completion token encapsulating the status indicating the result of the operation</returns>
         public async Task<IStatus<int>> UpdateAllAsync<T>(IList<T> objList, bool updateNulls = false)
         {
+            Connect();
             var collection = GetCollectionForType<T>();
             IList<string> keyList = new List<string>(objList.Count);
 
@@ -694,6 +725,7 @@ namespace DataContext.NoSql.MongoDB
         /// <returns>A completion token encapsulating the status indicating the result of the operation</returns>
         public async Task<IStatus<int>> UpdateAsync<T>(T obj, bool updateNulls = false)
         {
+            Connect();
             var collection = GetDocumentCollection<T>();
             string keyString = Mapper.GetKeyValue(obj).ToString();
             T record = await SelectOneAsync<T, string>(keyString);

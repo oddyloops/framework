@@ -12,6 +12,7 @@ using Framework.Utils;
 using System.Data;
 using System.Text;
 using System.Linq;
+using System.Collections.Concurrent;
 
 namespace DataContext.Relational
 {
@@ -34,9 +35,9 @@ namespace DataContext.Relational
 
         private IDictionary<DbConnection, DbTransaction> _connectionTransactionMap;
 
-        private DbType _dbType;
+        protected DbType _dbType;
 
-        private string _connectionString;
+        protected string _connectionString;
 
         private string _tablePrefix;
 
@@ -257,7 +258,14 @@ namespace DataContext.Relational
             IDictionary<string, object> keyValues = new Dictionary<string, object>();
             for(int i =0; i < reader.FieldCount; i++)
             {
-                keyValues.Add(reader.GetName(i), reader.GetValue(i));
+                if (reader.IsDBNull(i))
+                {
+                    keyValues.Add(reader.GetName(i), null);
+                }
+                else
+                {
+                    keyValues.Add(reader.GetName(i), reader.GetValue(i));
+                }
             }
             return keyValues;
         }
@@ -291,11 +299,19 @@ namespace DataContext.Relational
         public SqlDataContext([Import("JsonConfig")]IConfiguration config)
         {
             Config = config;
-            AutoCommit = Config.GetValue(ConfigConstants.RELATIONAL_DB_AUTOCOMMIT) == "1";
+            string autoCommitStr = Config.GetValue(ConfigConstants.RELATIONAL_DB_AUTOCOMMIT);
+            if(autoCommitStr == null)
+            {
+                AutoCommit = true; //enabled by default
+            }
+            else
+            {
+                AutoCommit = autoCommitStr == "1";
+            }
 
             if (!AutoCommit)
             {
-                _connectionTransactionMap = new Dictionary<DbConnection, DbTransaction>();
+                _connectionTransactionMap = new ConcurrentDictionary<DbConnection, DbTransaction>();
             }
 
             string dbTypeCode = Config.GetValue(ConfigConstants.RELATIONAL_DB_TYPE);
@@ -329,9 +345,9 @@ namespace DataContext.Relational
         /// <summary>
         /// Connects data provider to its source
         /// </summary>
-        public void Connect()
+        public virtual void Connect()
         {
-            Connect(ConfigConstants.RELATIONAL_CONNECTION_STRING);
+            Connect(Config.GetValue(ConfigConstants.RELATIONAL_CONNECTION_STRING));
         }
 
 
@@ -339,9 +355,9 @@ namespace DataContext.Relational
         /// Connects data provider to its source addressed by supplied connection string
         /// </summary>
         /// <param name="str">Connection string</param>
-        public void Connect(string str)
+        public virtual void Connect(string str)
         {
-            _connectionString = Config.GetValue(str);
+            _connectionString = str;
         }
 
 

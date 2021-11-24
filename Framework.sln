@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 15
-VisualStudioVersion = 15.0.28010.2046
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.30804.86
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Framework", "Framework\Framework.csproj", "{99B3CF77-BE76-4539-ABEF-22E046C47F59}"
 EndProject
@@ -17,7 +17,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Logger.MSImpl", "Logger.MSI
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DataContext.NoSql.MongoDB", "DataContext.NoSql.MongoDB\DataContext.NoSql.MongoDB.csproj", "{AB0B8EA1-14B0-4C7A-AB7B-B14E08793D51}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DataContext.NoSql.DocumentDB", "DataContext.NoSql.DocumentDB\DataContext.NoSql.DocumentDB.csproj", "{9129F3DA-EFC6-42EB-A8A1-C2562030F973}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DataContext.NoSql.DocumentDB", "DataContext.NoSql.DocumentDB\DataContext.NoSql.DocumentDB.csproj", "{9129F3DA-EFC6-42EB-A8A1-C2562030F973}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

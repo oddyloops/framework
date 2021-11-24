@@ -15,9 +15,10 @@ namespace Framework.Common.Services
         /// Creates a new user credential record
         /// </summary>
         /// <param name="id">User Id</param>
+        /// <param name="username">Username</param>
         /// <param name="password">Password</param>
         /// <returns>Operation result</returns>
-        Task<IStatus<int>> AddNewUserAsync(Guid id,string password);
+        Task<IStatus<int>> AddNewUserAsync(Guid id,string username,string password);
 
         /// <summary>
         /// Validates the correctness of user password
@@ -26,6 +27,29 @@ namespace Framework.Common.Services
         /// <param name="password">Password</param>
         /// <returns>Password.IsValid flag</returns>
         Task<bool> ValidatePasswordAsync(Guid id, string password);
+
+        /// <summary>
+        /// Authenticates a user with username and password
+        /// </summary>
+        /// <param name="username">Username</param>
+        /// <param name="password">Password</param>
+        /// <returns>User Id</returns>
+        Task<Guid> AuthenticateUserAsync(string username, string password);
+
+        /// <summary>
+        /// Gets the user id based on username alone
+        /// </summary>
+        /// <param name="username">Username</param>
+        /// <returns>UserId</returns>
+        Task<Guid> GetUserIdByUsernameAsync(string username);
+
+        /// <summary>
+        /// Checks if user exists based on Id
+        /// </summary>
+        /// <param name="userId">User Id</param>
+        /// <returns>User.IsExists</returns>
+        Task<bool> UserExistsAsync(Guid userId);
+
 
         /// <summary>
         /// Resets password
