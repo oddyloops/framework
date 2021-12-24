@@ -41,7 +41,7 @@ namespace Logger.MSImpl
                 }
                 catch(Exception)
                 {
-                    throw new Exception("Valid log levels are None, Warn, Debug, Info, Fatal, and Error");
+                    throw new Exception("Valid log levels are None, Trace, Warn, Debug, Info, Fatal, and Error");
                 }
             }
         }

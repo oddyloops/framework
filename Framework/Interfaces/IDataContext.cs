@@ -55,6 +55,21 @@ namespace Framework.Interfaces
         /// </summary>
         void RollBack();
 
+        /// <summary>
+        /// Gets the total record count in data source
+        /// </summary>
+        /// <typeparam name="T">Record type</typeparam>
+        /// <returns>Total record count</returns>
+        int Count<T>();
+
+        /// <summary>
+        /// Gets the total record count in data source asynchronously
+        /// </summary>
+        /// <typeparam name="T">Record type</typeparam>
+        /// <returns>A completion token indicating record count</returns>
+        Task<int> CountAsync<T>();
+
+        
 
         /// <summary>
         /// Adds an instance of T to the data source

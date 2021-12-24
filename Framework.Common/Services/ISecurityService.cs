@@ -82,5 +82,30 @@ namespace Framework.Common.Services
       
         /// <returns>The decrypted username-password pair</returns>
         Tuple<string, string> DecryptCredentials(byte[] encryptedCredentials, byte[] key);
+
+        /// <summary>
+        /// Creates a digital signature for the input data
+        /// </summary>
+        /// <param name="input">Input data</param>
+        /// <returns>Digital signature</returns>
+        byte[] CreateDigitalSignature(byte[] input);
+
+        /// <summary>
+        /// Verifies the data's integrity with the supplied signature
+        /// </summary>
+        /// <param name="input">Input data</param>
+        /// <param name="signature">Digital signature</param>
+        /// <returns>Is data valid?</returns>
+        bool VerifyDigitalSignature(byte[] input, byte[] signature);
+
+        /// <summary>
+        /// Verifies the data's integrity with the supplied signature
+        /// and public key
+        /// </summary>
+        /// <param name="input">Input data</param>
+        /// <param name="signature">Digital signature</param>
+        /// <param name="publicKey">Public key used for verification</param>
+        /// <returns>Is data valid?</returns>
+        bool VerifyDigitalSignature(byte[] input, byte[] signature, byte[] publicKey);
     }
 }

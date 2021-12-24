@@ -10,7 +10,6 @@ namespace Framework.Attributes
     [AttributeUsage(AttributeTargets.Class, AllowMultiple =false,Inherited = true)]
     public class NoSqlCollectionAttribute : Attribute
     {
-        private string _collectionName;
 
         /// <summary>
         /// Collection Name

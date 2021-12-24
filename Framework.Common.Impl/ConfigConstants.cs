@@ -79,6 +79,21 @@
         /// The server's listening port
         /// </summary>
         internal const string LISTENING_PORT = "LISTENING_PORT";
+
+        /// <summary>
+        /// SFTP Server Host Url
+        /// </summary>
+        internal const string SFTP_HOST = "SFTP_HOST";
+
+        /// <summary>
+        /// SFTP username
+        /// </summary>
+        internal const string SFTP_USERNAME = "SFTP_USERNAME";
+
+        /// <summary>
+        /// SFTP Password
+        /// </summary>
+        internal const string SFTP_PASSWORD = "SFTP_PASSWORD";
     }
 
 

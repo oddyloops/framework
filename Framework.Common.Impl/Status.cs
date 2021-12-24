@@ -24,7 +24,7 @@ namespace Framework.Common.Impl
         public string StatusMessage { get; set; }
     }
 
-    [Export(typeof(IStatus))]
+    [Export(typeof(IStatus<>))]
     public class Status<T> : IStatus<T>
     {
         /// <summary>
