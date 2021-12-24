@@ -642,33 +642,18 @@ namespace DataContext.NoSql.MongoDB
         public IStatus<int> UpdateAll<T>(IList<T> objList, bool updateNulls = false)
         {
             Connect();
-            var collection = GetCollectionForType<T>();
-            IList<string> keyList = new List<string>(objList.Count);
-
+            int updateCount = 0;
             foreach (T obj in objList)
             {
-                keyList.Add(Mapper.GetKeyValue(obj).ToString());
-            }
-            IDictionary<string, T> recordMap = new Dictionary<string, T>();
-            IEnumerable<T> records = SelectMatching<T>( x => keyList.Contains(Mapper.GetKeyValue(x).ToString()));
-            foreach(var rec in records)
-            {
-                recordMap.Add(Mapper.GetKeyValue(rec).ToString(), rec);
-            }
-            string keyName = Mapper.GetKeyName(typeof(T));
-            int updateCount = 0;
-            for(int i =0; i < keyList.Count;i++)
-            {
-                Util.DeepCopy(objList[i], recordMap[keyList[i]], !updateNulls, keyName);
-                var result = collection.ReplaceOne(x => Mapper.GetKeyValue(x).ToString() == keyList[i], recordMap[keyList[i]] );
-                if(result.IsAcknowledged)
+                var result = Update(obj, updateNulls);
+                if(result.IsSuccess)
                 {
                     updateCount++;
                 }
             }
-           
+         
             IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
-            status.IsSuccess = updateCount == keyList.Count;
+            status.IsSuccess = updateCount == objList.Count;
             status.StatusInfo = updateCount;
             return status;
         }
@@ -684,33 +669,18 @@ namespace DataContext.NoSql.MongoDB
         public async Task<IStatus<int>> UpdateAllAsync<T>(IList<T> objList, bool updateNulls = false)
         {
             Connect();
-            var collection = GetCollectionForType<T>();
-            IList<string> keyList = new List<string>(objList.Count);
-
+            int updateCount = 0;
             foreach (T obj in objList)
             {
-                keyList.Add(Mapper.GetKeyValue(obj).ToString());
-            }
-            IDictionary<string, T> recordMap = new Dictionary<string, T>();
-            IEnumerable<T> records = await SelectMatchingAsync<T>(x => keyList.Contains(Mapper.GetKeyValue(x).ToString()));
-            foreach(var rec in records)
-            {
-                recordMap.Add(Mapper.GetKeyValue(rec).ToString(), rec);
-            }
-            string keyName = Mapper.GetKeyName(typeof(T));
-            int updateCount = 0;
-            for (int i = 0; i < keyList.Count; i++)
-            {
-                Util.DeepCopy(objList[i], recordMap[keyList[i]], !updateNulls, keyName);
-                var result =await  collection.ReplaceOneAsync(x => Mapper.GetKeyValue(x).ToString() == keyList[i], recordMap[keyList[i]]);
-                if (result.IsAcknowledged)
+                var result = await UpdateAsync(obj, updateNulls);
+                if (result.IsSuccess)
                 {
                     updateCount++;
                 }
             }
 
             IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
-            status.IsSuccess = updateCount == keyList.Count;
+            status.IsSuccess = updateCount == objList.Count;
             status.StatusInfo = updateCount;
             return status;
         }
