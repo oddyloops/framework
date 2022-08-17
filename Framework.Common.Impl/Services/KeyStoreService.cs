@@ -4,11 +4,11 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
-using System.Composition;
 using System.IO;
 using System.Security.Cryptography;
 using System.Linq;
 using Framework.Common.Impl;
+using Framework.Common.Configs;
 
 namespace Framrwork.Common.Impl.Services
 {
@@ -55,17 +55,24 @@ namespace Framrwork.Common.Impl.Services
     /// A concrete implementation of the IKeyStoreService interface that uses the native windows RSA assymetric
     /// encryption for securing keys
     /// </summary>
-    [Export(typeof(IKeyStoreService))]
-    public class RTKeyStoreService : IKeyStoreService
+    public class KeyStoreService : IKeyStoreService
     {
-        /// <summary>
-        /// A reference to the configuration handle for accessing setting values
-        /// </summary>
-        [Import("Env")]
-        public IConfiguration Config { get; set; }
 
+
+        private IKeyStoreConfig _keyStoreConfig;
 
         private IList<KeyData> keyCache = new List<KeyData>();
+
+        /// <summary>
+        /// Constructs a new instance of the keystore service with its required depedencies
+        /// </summary>
+        /// <param name="keyStoreConfig">Object encapsulating parameters needed for maintaining
+        /// the keystore</param>
+
+        public KeyStoreService(IKeyStoreConfig keyStoreConfig)
+        {
+            _keyStoreConfig = keyStoreConfig;
+        }
 
         #region HelperMethods
         /// <summary>
@@ -73,7 +80,7 @@ namespace Framrwork.Common.Impl.Services
         /// </summary>
         private void UpdateCache()
         {
-            string storageFile = Config.GetValue(ConfigConstants.KEY_STORE_PATH);
+            string storageFile = _keyStoreConfig.KeyStorePath;
             if (!File.Exists(storageFile))
             {
                 using (File.Create(storageFile))
@@ -99,7 +106,7 @@ namespace Framrwork.Common.Impl.Services
         /// </summary>
         private void FlushCacheToDisk()
         {
-            string storageFile = Config.GetValue(ConfigConstants.KEY_STORE_PATH);
+            string storageFile = _keyStoreConfig.KeyStorePath;
             string json = JsonConvert.SerializeObject(keyCache, Formatting.Indented);
             File.WriteAllText(storageFile, json);
         }
@@ -114,7 +121,7 @@ namespace Framrwork.Common.Impl.Services
         private byte[] EncryptSymmKey(byte[] symmKey)
         {
             CreateAsymKeyIfNotExists();
-            string assymKeyContainer = Config.GetValue(ConfigConstants.ASYM_KEY_PATH);
+            string assymKeyContainer = _keyStoreConfig.AssymetricKeyPath;
             CspParameters csp = new CspParameters() { KeyContainerName = assymKeyContainer };
             using (RSACryptoServiceProvider rsa = new RSACryptoServiceProvider(csp))
             {
@@ -131,7 +138,7 @@ namespace Framrwork.Common.Impl.Services
         private byte[] DecryptSymmKey(byte[] encSymmKey)
         {
             CreateAsymKeyIfNotExists();
-            string assymKeyContainer = Config.GetValue(ConfigConstants.ASYM_KEY_PATH);
+            string assymKeyContainer = _keyStoreConfig.AssymetricKeyPath;
             CspParameters csp = new CspParameters() { KeyContainerName = assymKeyContainer };
             using (RSACryptoServiceProvider rsa = new RSACryptoServiceProvider(csp))
             {
@@ -144,7 +151,7 @@ namespace Framrwork.Common.Impl.Services
         /// </summary>
         private void DeleteAsymmetricKey()
         {
-            string assymKeyContainer = Config.GetValue(ConfigConstants.ASYM_KEY_PATH);
+            string assymKeyContainer = _keyStoreConfig.AssymetricKeyPath;
             CspParameters csp = new CspParameters() { KeyContainerName = assymKeyContainer };
             using (RSACryptoServiceProvider rsa = new RSACryptoServiceProvider(csp))
             {
@@ -159,7 +166,7 @@ namespace Framrwork.Common.Impl.Services
         /// </summary>
         public void CreateAsymKeyIfNotExists()
         {
-            string assymKeyContainer = Config.GetValue(ConfigConstants.ASYM_KEY_PATH);
+            string assymKeyContainer = _keyStoreConfig.AssymetricKeyPath;
             CspParameters csp = new CspParameters()
             {
                 KeyContainerName = assymKeyContainer,
@@ -169,7 +176,7 @@ namespace Framrwork.Common.Impl.Services
 
             if (!cspKeyContainer.Accessible)
             {
-                int keySize = int.Parse(Config.GetValue(ConfigConstants.ASYM_KEY_SIZE_BITS));
+                int keySize = int.Parse(_keyStoreConfig.AssymetricKeySizeBits);
                 using (RSACryptoServiceProvider rsa = new RSACryptoServiceProvider(keySize, csp))
                 {
                     rsa.PersistKeyInCsp = true;
@@ -249,7 +256,7 @@ namespace Framrwork.Common.Impl.Services
         public void Clear()
         {
             keyCache.Clear();
-            string storageFile = Config.GetValue(ConfigConstants.KEY_STORE_PATH);
+            string storageFile = _keyStoreConfig.KeyStorePath;
             if (File.Exists(storageFile))
             {
                 File.Delete(storageFile);

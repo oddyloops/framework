@@ -2,8 +2,6 @@
 using Framework.Interfaces;
 using Framework.Utils;
 using System;
-using System.Collections.Generic;
-using System.Composition;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
@@ -11,7 +9,9 @@ using System.Text;
 
 namespace Framework.Common.Impl.Services
 {
-    [Export(typeof(IImageService))]
+    /// <summary>
+    /// A concrete implementation of the IImageService
+    /// </summary>
     public class ImageService : IImageService
     {
         private const int MIN_BIG = 720;

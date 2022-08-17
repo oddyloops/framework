@@ -1,8 +1,6 @@
 ﻿
 using System.Collections.Generic;
 using System.Text;
-using System.Composition;
-
 using System.Threading.Tasks;
 using System.IO;
 using System.Linq;
@@ -10,33 +8,34 @@ using SendGrid;
 using SendGrid.Helpers.Mail;
 using Framework.Common.Services;
 using Framework.Interfaces;
+using Framework.Common.Configs;
 
 namespace Framework.Common.Impl.Services
 {
     /// <summary>
     /// A concrete implementation for the ICommunicationService interface 
     /// </summary>
-    [Export(typeof(ICommunicationService))]
+  
     public class CommunicationService : ICommunicationService
     {
+        //configs
+        private IEmailConfig _emailConfig;
+        //services
+        private ISecurityService _securityService;
+        private IKeyStoreService _keyStoreService;
+      
         /// <summary>
-        /// A reference to the configuration component for accessing setting values
+        /// Constructs an instance of CommunicationService with require dependencies
         /// </summary>
-        [Import("JsonConfig")]
-        public IConfiguration Config { get; set; }
-
-
-        /// <summary>
-        /// A reference to a security component for encrypting/decrypting email credentials
-        /// </summary>
-        [Import]
-        public ISecurityService SecurityService { get; set; }
-
-        /// <summary>
-        /// A reference to a key store component for retrieving keys used in encryption/decryption
-        /// </summary>
-        [Import]
-        public IKeyStoreService KeyStoreService { get; set; }
+        /// <param name="emailConfig">Object encapsulating configuration parameters for sending email</param>
+        /// <param name="securityService">A service instance for security</param>
+        /// <param name="keyStoreService">A service instance for maintaining encryption/decryption keys</param>
+        public CommunicationService(IEmailConfig emailConfig,ISecurityService securityService, IKeyStoreService keyStoreService)
+        {
+            _emailConfig = emailConfig;
+            _securityService = securityService;
+            _keyStoreService = keyStoreService;
+        }
 
         /// <summary>
         /// Sends out an email to a single recipient within a non-blocking context
@@ -65,9 +64,9 @@ namespace Framework.Common.Impl.Services
         public async Task<IStatus> SendEmailAsync(string sender, IList<string> recipients, IList<string> ccs, IList<string> bccs, string subject, string body)
         {
 
-            byte[] encryptedCredentials = File.ReadAllBytes(Config.GetValue(ConfigConstants.SEND_GRID_ENCRYPTED));
-            byte[] symmKey = KeyStoreService.GetKey(Config.GetValue(ConfigConstants.SYMMETRIC_KEY_INDEX));
-            string apiKey = Encoding.UTF8.GetString(SecurityService.Decrypt(encryptedCredentials, symmKey));
+            byte[] encryptedCredentials = File.ReadAllBytes(_emailConfig.EncryptedCredentialPath);
+            byte[] symmKey = _keyStoreService.GetKey(_emailConfig.EncryptionKeyPath);
+            string apiKey = Encoding.UTF8.GetString(_securityService.Decrypt(encryptedCredentials, symmKey));
 
             List<EmailAddress> receivers = (from r in recipients select new EmailAddress(r)).ToList();
 

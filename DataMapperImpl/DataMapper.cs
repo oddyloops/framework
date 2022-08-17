@@ -2,7 +2,6 @@
 using Framework.Interfaces;
 using System;
 using System.Collections.Generic;
-using System.Composition;
 using System.Linq;
 using System.Reflection;
 
@@ -11,7 +10,7 @@ namespace DataMapperImpl
     /// <summary>
     /// A concrete implementation of the IDataMapper interface
     /// </summary>
-    [Export(typeof(IDataMapper))]
+   
     public class DataMapper : IDataMapper
     {
 

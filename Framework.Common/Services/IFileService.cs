@@ -39,13 +39,12 @@ namespace Framework.Common.Services
         Task<IStatus<int>> UploadFileAsync(string sourceFile, string dest);
 
         /// <summary>
-        /// Uploads a file to an existing path 
+        /// Uploads multiple files to an existing path 
         /// </summary>
         /// <param name="sourceFiles">Files to be uploaded, (if file already exists, it will be
         /// overwritten)</param>
         /// <param name="dest">Destination path on file server</param>
-        /// <returns>A status indicating the number of files uploaded which should be 1 if 
-        /// successful</returns>
+        /// <returns>A status indicating the number of files uploaded </returns>
         Task<IStatus<int>> UploadFilesAsync(string[] sourceFiles, string dest);
 
         /// <summary>

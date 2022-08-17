@@ -1,7 +1,6 @@
 ﻿using Framework.Interfaces;
 using System;
 using System.Collections.Generic;
-using System.Composition;
 using System.Text;
 
 namespace Framework.Common.Impl
@@ -9,7 +8,6 @@ namespace Framework.Common.Impl
     /// <summary>
     /// A concrete implementation of the IStatus interface
     /// </summary>
-    [Export(typeof(IStatus))]
     public class Status : IStatus
     {
         /// <summary>
@@ -24,7 +22,7 @@ namespace Framework.Common.Impl
         public string StatusMessage { get; set; }
     }
 
-    [Export(typeof(IStatus<>))]
+  
     public class Status<T> : IStatus<T>
     {
         /// <summary>

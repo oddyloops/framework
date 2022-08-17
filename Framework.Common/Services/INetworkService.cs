@@ -24,12 +24,6 @@ namespace Framework.Common.Services
         /// </summary>
         event ReceivedStreamHandler OnReceivedStreamMessage;
 
-
-        /// <summary>
-        /// A reference to a configuration component used to access config settings required by the network service
-        /// </summary>
-        IConfiguration Config { get; set; }
-
         /// <summary>
         /// Address scheme network nodes will be based on
         /// </summary>

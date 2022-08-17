@@ -8,10 +8,7 @@ namespace Framework.Common.Services
     /// </summary>
     public interface IKeyStoreService : IService, IDisposable
     {
-        /// <summary>
-        /// A reference to a configuration component used to access config settings required by the key store service
-        /// </summary>
-        IConfiguration Config { get; set; }
+      
 
         /// <summary>
         /// Creates an asymmetric key in the operating system's

@@ -1,8 +1,8 @@
-﻿using Framework.Common.Services;
+﻿using Framework.Common.Configs;
+using Framework.Common.Services;
 using Framework.Interfaces;
 using System;
 using System.Collections.Generic;
-using System.Composition;
 using System.IO;
 using System.Security.Cryptography;
 using System.Text;
@@ -12,21 +12,30 @@ namespace Framework.Common.Impl.Services
     /// <summary>
     /// A concrete implementation of the ISecurityService interface
     /// </summary>
-    [Export(typeof(ISecurityService))]
+    
     public class SecurityService : ISecurityService
     {
 
         private const int DEFAULT_SALT_LEN = 20;
 
+        //configs
+        private ISecurityConfig _securityConfig;
+        
+        //services
+        private IKeyStoreService _keyStoreService;
+       
+
         /// <summary>
-        /// A reference to the configuration component for accessing setting values
+        /// Constructs a new instance of the SecurityService class with its required dependencies
         /// </summary>
-        [Import("Env")]
-        public IConfiguration Config { get; set; }
-
-        [Import]
-        public IKeyStoreService KeyStore { get; set; }
-
+        /// <param name="securityConfig">Object encapsulating the parameters required to configure the security service</param>
+        /// <param name="keyStoreService">An instance of ikeystoreservice for accessing and updating encryption keys</param>
+   
+        public SecurityService(ISecurityConfig securityConfig,IKeyStoreService keyStoreService)
+        {
+            _securityConfig = securityConfig;
+            _keyStoreService = keyStoreService;
+        }
 
         #region HelperMethods
         /// <summary>
@@ -60,7 +69,7 @@ namespace Framework.Common.Impl.Services
         /// <returns>Decrypted message</returns>
         public byte[] Decrypt(byte[] encryptedMessage, byte[] key)
         {
-            int blockSize = int.Parse(Config.GetValue(ConfigConstants.ENCRYPTION_BLOCK_SIZE_BYTES));
+            int blockSize = int.Parse(_securityConfig.EncryptionBlockSizeBytes);
             Aes aes = CreateAes(key, blockSize);
             byte[] decrypted = null;
             //read iv out of cipher buffer
@@ -118,9 +127,8 @@ namespace Framework.Common.Impl.Services
         /// <returns>Encrypted message</returns>
         public byte[] Encrypt(byte[] message, byte[] key)
         {
-            int blockSize = int.Parse(Config.GetValue(ConfigConstants.ENCRYPTION_BLOCK_SIZE_BYTES));
+            int blockSize = int.Parse(_securityConfig.EncryptionBlockSizeBytes);
             Aes aes = CreateAes(key, blockSize);
-            byte padLength = (byte)(message.Length < blockSize ? blockSize - message.Length : message.Length % blockSize);
             byte[] encrypted = null;
             using (ICryptoTransform crypto = aes.CreateEncryptor())
             {
@@ -235,8 +243,8 @@ namespace Framework.Common.Impl.Services
         /// <returns>Digital signature</returns>
         public byte[] CreateDigitalSignature(byte[] input)
         {
-            KeyStore.CreateAsymKeyIfNotExists();
-            string assymKeyContainer = Config.GetValue(ConfigConstants.ASYM_KEY_PATH);
+            _keyStoreService.CreateAsymKeyIfNotExists();
+            string assymKeyContainer = _securityConfig.AssymetricKeyPath;
             CspParameters csp = new CspParameters() { KeyContainerName = assymKeyContainer };
             using(RSACryptoServiceProvider rsa = new RSACryptoServiceProvider(csp))
             {
@@ -254,7 +262,7 @@ namespace Framework.Common.Impl.Services
         /// <returns>Is data valid?</returns>
         public bool VerifyDigitalSignature(byte[] input, byte[] signature)
         {
-            string assymKeyContainer = Config.GetValue(ConfigConstants.ASYM_KEY_PATH);
+            string assymKeyContainer = _securityConfig.AssymetricKeyPath;
             CspParameters csp = new CspParameters() { KeyContainerName = assymKeyContainer };
             using (RSACryptoServiceProvider rsa = new RSACryptoServiceProvider(csp))
             {
@@ -262,9 +270,16 @@ namespace Framework.Common.Impl.Services
             }
         }
 
+        /// <summary>
+        /// Checks the authenticity and integrity of input data
+        /// </summary>
+        /// <param name="input">Input data</param>
+        /// <param name="signature">Digital signature</param>
+        /// <param name="publicKey">Assymetric key to be used for verification</param>
+        /// <returns>Is data valid?</returns>
         public bool VerifyDigitalSignature(byte[] input, byte[] signature, byte[] publicKey)
         {
-            int asymKeySize = int.Parse(Config.GetValue(ConfigConstants.ASYM_KEY_SIZE_BITS));
+            int asymKeySize = int.Parse(_securityConfig.AssymetricKeySizeBits);
             using(RSACryptoServiceProvider rsa = new RSACryptoServiceProvider(asymKeySize))
             {
                 rsa.ImportCspBlob(publicKey);

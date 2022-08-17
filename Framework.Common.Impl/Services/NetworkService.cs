@@ -2,7 +2,6 @@
 using Framework.Interfaces;
 using System;
 using System.Collections.Generic;
-using System.Composition;
 using System.Net;
 using System.Net.Sockets;
 using System.Linq;
@@ -11,15 +10,20 @@ using Framework.Common.Items;
 using Framework.Utils;
 using System.Threading;
 using System.Security;
+using Framework.Common.Configs;
 
 namespace Framework.Common.Impl.Services
 {
     /// <summary>
     /// A concrete implementation of the INetworkService for a client-server architecture
     /// </summary>
-    [Export(typeof(INetworkService))]
+
     public class NetworkService : INetworkService
     {
+        //config
+        private INetworkConfig _networkConfig;
+        
+
         /// <summary>
         /// Thread client uses to listen for incoming messages from server in a connection
         /// oriented protocol
@@ -70,11 +74,7 @@ namespace Framework.Common.Impl.Services
         public event ReceivedStreamHandler OnReceivedStreamMessage;
 
 
-        /// <summary>
-        /// A reference to a configuration component used to access config settings required by the network service
-        /// </summary>
-        [Import("JsonConfig")]
-        public IConfiguration Config { get; set; }
+     
 
         /// <summary>
         /// Address scheme network nodes will be based on
@@ -136,17 +136,18 @@ namespace Framework.Common.Impl.Services
         /// </summary>
         public int ReceiveBufferSize { get; private set; } = 8192;
    
-        public NetworkService()
+        public NetworkService(INetworkConfig networkConfig)
         {
-            IsConnectionless = Config.GetValue(ConfigConstants.IS_CONNECTIONLESS) == "1";
-            AddressScheme =(AddressFamily) Enum.Parse(typeof(AddressFamily), Config.GetValue(ConfigConstants.ADDRESS_FAMILY));
-            Protocol = (ProtocolType)Enum.Parse(typeof(ProtocolType), Config.GetValue(ConfigConstants.PROTOCOL));
+            _networkConfig = networkConfig;
+            IsConnectionless = _networkConfig.IsConnectionless;
+            AddressScheme =(AddressFamily) Enum.Parse(typeof(AddressFamily), _networkConfig.AddressFamily);
+            Protocol = (ProtocolType)Enum.Parse(typeof(ProtocolType), _networkConfig.Protocol);
             ConnectedClients = new Dictionary<INetworkNode, Thread>();
             Self = Util.Container.CreateInstance<INetworkNode>();
             Self.Name = Dns.GetHostName();
             
 
-            string portStr = Config.GetValue(ConfigConstants.LISTENING_PORT);
+            string portStr = _networkConfig.ListeningPort;
             if(!string.IsNullOrEmpty(portStr))
             {
                 Self.ListeningPort = Convert.ToInt32(portStr);
@@ -156,7 +157,7 @@ namespace Framework.Common.Impl.Services
                                  where addy.AddressFamily == AddressScheme
                                  select addy).First();
             Self.Address = address.GetAddressBytes();
-            string receiveSizeStr = Config.GetValue(ConfigConstants.RECEIVE_BUFFER_SIZE);
+            string receiveSizeStr = _networkConfig.ReceivedBufferSize;
             if(receiveSizeStr != null)
             {
                 ReceiveBufferSize = Convert.ToInt32(receiveSizeStr);
