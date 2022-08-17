@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 16
-VisualStudioVersion = 16.0.30804.86
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31912.275
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Framework", "Framework\Framework.csproj", "{99B3CF77-BE76-4539-ABEF-22E046C47F59}"
 EndProject
@@ -12,8 +12,6 @@ EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Framework.Common.Impl", "Framework.Common.Impl\Framework.Common.Impl.csproj", "{169B3E47-331D-4A11-9D3B-F5C988CF93BE}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DataContext.Relational", "DataContext.Relational\DataContext.Relational.csproj", "{44B9456F-EF01-42EF-A9B8-4BB4E89E768B}"
-EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Logger.MSImpl", "Logger.MSImpl\Logger.MSImpl.csproj", "{18A0BBAF-7221-4B4F-BE06-6A0AE2B41911}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DataContext.NoSql.MongoDB", "DataContext.NoSql.MongoDB\DataContext.NoSql.MongoDB.csproj", "{AB0B8EA1-14B0-4C7A-AB7B-B14E08793D51}"
 EndProject
@@ -45,10 +43,6 @@ Global
 		{44B9456F-EF01-42EF-A9B8-4BB4E89E768B}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{44B9456F-EF01-42EF-A9B8-4BB4E89E768B}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{44B9456F-EF01-42EF-A9B8-4BB4E89E768B}.Release|Any CPU.Build.0 = Release|Any CPU
-		{18A0BBAF-7221-4B4F-BE06-6A0AE2B41911}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{18A0BBAF-7221-4B4F-BE06-6A0AE2B41911}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{18A0BBAF-7221-4B4F-BE06-6A0AE2B41911}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{18A0BBAF-7221-4B4F-BE06-6A0AE2B41911}.Release|Any CPU.Build.0 = Release|Any CPU
 		{AB0B8EA1-14B0-4C7A-AB7B-B14E08793D51}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{AB0B8EA1-14B0-4C7A-AB7B-B14E08793D51}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{AB0B8EA1-14B0-4C7A-AB7B-B14E08793D51}.Release|Any CPU.ActiveCfg = Release|Any CPU
