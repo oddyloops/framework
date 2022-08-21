@@ -1,7 +1,6 @@
 ﻿using Framework.Interfaces;
 using System;
 using System.Collections.Generic;
-using System.Composition;
 using System.Linq.Expressions;
 using System.Threading.Tasks;
 using System.Data.Common;
@@ -13,6 +12,7 @@ using System.Data;
 using System.Text;
 using System.Linq;
 using System.Collections.Concurrent;
+using Framework.Interfaces.Configs;
 
 namespace DataContext.Relational
 {
@@ -29,9 +29,10 @@ namespace DataContext.Relational
     /// <summary>
     /// A concrete implementation of the IDataContext interface for relational databases
     /// </summary>
-    [Export("Relational", typeof(IDataContext))]
+
     public class SqlDataContext : IDataContext
     {
+
 
         private IDictionary<DbConnection, DbTransaction> _connectionTransactionMap;
 
@@ -39,25 +40,20 @@ namespace DataContext.Relational
 
         protected string _connectionString;
 
-        private string _tablePrefix;
+        private string _defaultSchema;
 
         /// <summary>
         /// A reference to a data mapper component required to map query results to concrete objects
         /// </summary>
-        [Import]
-        public IDataMapper Mapper { get; set; }
+        private IDataMapper _mapper;
 
-        /// <summary>
-        /// A reference to a configuration component used to access config settings required by the data provider
-        /// </summary>
-        public IConfiguration Config { get; set; }
 
         /// <summary>
         /// A flag to indicate if changes made should be automatically committed to data source or not (if applicable).
         /// This should be set in a config file if using dependency injection
         /// </summary>
         public bool AutoCommit { get; set; }
-        public string DBName { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
+       
 
 
         #region Helpers
@@ -129,12 +125,12 @@ namespace DataContext.Relational
         {
 
             List<KeyValuePair<string, object>> paramRec = new List<KeyValuePair<string, object>>(); //need to maintain order for traversals
-            IList<string> fieldNames = Mapper.GetFieldNames(record.GetType());
+            IList<string> fieldNames = _mapper.GetFieldNames(record.GetType());
             foreach(var field in fieldNames)
             {
-                if (addNulls || Mapper.GetField(field, record) != null)
+                if (addNulls || _mapper.GetField(field, record) != null)
                 {
-                    paramRec.Add(new KeyValuePair<string, object>(field, Mapper.GetField(field, record)));
+                    paramRec.Add(new KeyValuePair<string, object>(field, _mapper.GetField(field, record)));
                 }
             }
             return paramRec;
@@ -147,7 +143,7 @@ namespace DataContext.Relational
         /// <param name="objParam">List of fields</param>
         private void SwapKeyForLast<T>(List<KeyValuePair<string, object>> objParam)
         {
-            string keyName = Mapper.GetKeyMapName(typeof(T));
+            string keyName = _mapper.GetKeyMapName(typeof(T));
             int i = 0;
             for(;i < objParam.Count; i++)
             {
@@ -190,7 +186,7 @@ namespace DataContext.Relational
         /// <returns>A parameterized update statement string</returns>
         private string BuildCommandForUpdate(List<KeyValuePair<string, object>> parameters, string tableName, int paramOffset,KeyValuePair<string,object> key)
         {
-            StringBuilder command = new StringBuilder($"UPDATE {_tablePrefix}{tableName} SET ");
+            StringBuilder command = new StringBuilder($"UPDATE {_defaultSchema}{tableName} SET ");
             bool isFirst = true;
             int paramCount = 0;
             foreach(var param in parameters)
@@ -220,7 +216,7 @@ namespace DataContext.Relational
         /// <returns>A parameterized insert statement string</returns>
         private string BuildCommandForInsert(List<KeyValuePair<string, object>> parameters,string tableName, int paramOffset)
         {
-            StringBuilder command = new StringBuilder($"INSERT INTO {_tablePrefix}{tableName}(");
+            StringBuilder command = new StringBuilder($"INSERT INTO {_defaultSchema}{tableName}(");
             bool isFirst = true;
             foreach(var param in parameters)
             {
@@ -293,33 +289,26 @@ namespace DataContext.Relational
         #endregion
 
         /// <summary>
-        /// Constructs an instance of this class based on configuration values
+        /// Constructs an instance of this class with require dependencies
+        /// <paramref name="connection">An instance encapsulating parameters for establishing a connection</paramref>
+        /// <paramref name="mapper">An instance of a data mapper for mapping query results to concrete DTO objects</paramref>
         /// </summary>
-        [ImportingConstructor]
-        public SqlDataContext([Import("JsonConfig")]IConfiguration config)
+    
+        public SqlDataContext(IRelationalConnection connection, IDataMapper mapper)
         {
-            Config = config;
-            string autoCommitStr = Config.GetValue(ConfigConstants.RELATIONAL_DB_AUTOCOMMIT);
-            if(autoCommitStr == null)
-            {
-                AutoCommit = true; //enabled by default
-            }
-            else
-            {
-                AutoCommit = autoCommitStr == "1";
-            }
-
+            _mapper = mapper;
+            _connectionString = connection.ConnectionString;
+            AutoCommit = connection.IsAutoCommit;
             if (!AutoCommit)
             {
                 _connectionTransactionMap = new ConcurrentDictionary<DbConnection, DbTransaction>();
             }
+;
+            _dbType = (DbType)connection.DBType;
 
-            string dbTypeCode = Config.GetValue(ConfigConstants.RELATIONAL_DB_TYPE);
-            _dbType = dbTypeCode == null ? DbType.SqlServer : (DbType)Convert.ToInt32(dbTypeCode);
-
-            string tablePrefix = Config.GetValue(ConfigConstants.RELATIONAL_TABLE_PREFIX);
-            _tablePrefix = tablePrefix ?? string.Empty;
-            Connect();
+            string tablePrefix = connection.DefaultSchema;
+            _defaultSchema = tablePrefix ?? string.Empty;
+            
 
         }
 
@@ -347,18 +336,9 @@ namespace DataContext.Relational
         /// </summary>
         public virtual void Connect()
         {
-            Connect(Config.GetValue(ConfigConstants.RELATIONAL_CONNECTION_STRING));
+            throw new NotImplementedException();
         }
 
-
-        /// <summary>
-        /// Connects data provider to its source addressed by supplied connection string
-        /// </summary>
-        /// <param name="str">Connection string</param>
-        public virtual void Connect(string str)
-        {
-            _connectionString = str;
-        }
 
 
         /// <summary>
@@ -369,18 +349,17 @@ namespace DataContext.Relational
         /// <returns>A status indicating result of the operation</returns>
         public IStatus<int> Delete<T>(T obj)
         {
-            DbConnection connection = null;
-            connection = CreateConnection();
+            DbConnection connection = CreateConnection();
 
             try
             {
                 connection.Open();
-                string tableName = Mapper.GetObjectMapName(typeof(T));
-                string keyName = Mapper.GetKeyMapName(typeof(T));
+                string tableName = _mapper.GetObjectMapName(typeof(T));
+                string keyName = _mapper.GetKeyMapName(typeof(T));
 
-                string cmdStr = $"DELETE FROM {_tablePrefix}{tableName} WHERE {keyName} = @P0";
+                string cmdStr = $"DELETE FROM {_defaultSchema}{tableName} WHERE {keyName} = @P0";
                 List<KeyValuePair<string, object>> parameters = new List<KeyValuePair<string, object>> {
-                    new KeyValuePair<string, object>( "@P0", Mapper.GetKeyValue(obj))
+                    new KeyValuePair<string, object>( "@P0", _mapper.GetKeyValue(obj))
                 };
                 var cmd = CreateCommand(cmdStr,parameters,connection);
                 int result = cmd.ExecuteNonQuery();
@@ -407,16 +386,15 @@ namespace DataContext.Relational
         /// <returns>A status indicating result of the operation</returns>
         public IStatus<int> Delete<T, K>(K key)
         {
-            DbConnection connection = null;
-            connection = CreateConnection();
+            DbConnection connection = CreateConnection();
 
             try
             {
                 connection.Open();
-                string tableName = Mapper.GetObjectMapName(typeof(T));
-                string keyName = Mapper.GetKeyMapName(typeof(T));
+                string tableName = _mapper.GetObjectMapName(typeof(T));
+                string keyName = _mapper.GetKeyMapName(typeof(T));
 
-                string cmdStr = $"DELETE FROM {_tablePrefix}{tableName} WHERE {keyName} = @P0";
+                string cmdStr = $"DELETE FROM {_defaultSchema}{tableName} WHERE {keyName} = @P0";
                 List<KeyValuePair<string, object>> parameters = new List<KeyValuePair<string, object>> {
                     new KeyValuePair<string, object>( "@P0", key)
                 };
@@ -445,15 +423,14 @@ namespace DataContext.Relational
         /// <returns>A status indicating result of the operation</returns>
         public IStatus<int> DeleteAll<T>(IList<T> objList)
         {
-            DbConnection connection = null;
-            connection = CreateConnection();
+            DbConnection connection = CreateConnection();
 
             try
             {
 
                 connection.Open();
-                string tableName = Mapper.GetObjectMapName(typeof(T));
-                string keyName = Mapper.GetKeyMapName(typeof(T));
+                string tableName = _mapper.GetObjectMapName(typeof(T));
+                string keyName = _mapper.GetKeyMapName(typeof(T));
                 StringBuilder keyParmStr = new StringBuilder();
                 List<KeyValuePair<string, object>> parameters = new List<KeyValuePair<string, object>>();
                 for (int i = 0; i < objList.Count; i++)
@@ -463,10 +440,10 @@ namespace DataContext.Relational
                         keyParmStr.Append(",");
                     }
                     keyParmStr.Append($"@P{i}");
-                    parameters.Add(new KeyValuePair<string, object>($"@P{i}", Mapper.GetKeyValue(objList[i])));
+                    parameters.Add(new KeyValuePair<string, object>($"@P{i}", _mapper.GetKeyValue(objList[i])));
                 }
 
-                string cmdStr = $"DELETE FROM {_tablePrefix}{tableName} WHERE {keyName} IN ({keyParmStr})";
+                string cmdStr = $"DELETE FROM {_defaultSchema}{tableName} WHERE {keyName} IN ({keyParmStr})";
                 var cmd = CreateCommand(cmdStr, parameters, connection);
                 int result = cmd.ExecuteNonQuery();
                 IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
@@ -492,15 +469,14 @@ namespace DataContext.Relational
         /// <returns>A status indicating result of the operation</returns>
         public IStatus<int> DeleteAll<T, K>(IList<K> keyList)
         {
-            DbConnection connection = null;
-            connection = CreateConnection();
+            DbConnection connection = CreateConnection();
 
             try
             {
 
                 connection.Open();
-                string tableName = Mapper.GetObjectMapName(typeof(T));
-                string keyName = Mapper.GetKeyMapName(typeof(T));
+                string tableName = _mapper.GetObjectMapName(typeof(T));
+                string keyName = _mapper.GetKeyMapName(typeof(T));
                 StringBuilder keyParmStr = new StringBuilder();
                 List<KeyValuePair<string, object>> parameters = new List<KeyValuePair<string, object>>();
                 for (int i = 0; i < keyList.Count; i++)
@@ -513,7 +489,7 @@ namespace DataContext.Relational
                     parameters.Add(new KeyValuePair<string, object>($"@P{i}", keyList[i]));
                 }
 
-                string cmdStr = $"DELETE FROM {_tablePrefix}{tableName} WHERE {keyName} IN ({keyParmStr})"; var cmd = CreateCommand(cmdStr, parameters, connection);
+                string cmdStr = $"DELETE FROM {_defaultSchema}{tableName} WHERE {keyName} IN ({keyParmStr})"; var cmd = CreateCommand(cmdStr, parameters, connection);
                 int result = cmd.ExecuteNonQuery();
                 IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
                 status.IsSuccess = result > 0;
@@ -538,15 +514,14 @@ namespace DataContext.Relational
         /// <returns>A completion token encapsulating the status indicating the result of the operation</returns>
         public async Task<IStatus<int>> DeleteAllAsync<T>(IList<T> objList)
         {
-            DbConnection connection = null;
-            connection = CreateConnection();
+            DbConnection connection = CreateConnection();
 
             try
             {
 
                 await connection.OpenAsync();
-                string tableName = Mapper.GetObjectMapName(typeof(T));
-                string keyName = Mapper.GetKeyMapName(typeof(T));
+                string tableName = _mapper.GetObjectMapName(typeof(T));
+                string keyName = _mapper.GetKeyMapName(typeof(T));
                 StringBuilder keyParmStr = new StringBuilder();
                 List<KeyValuePair<string, object>> parameters = new List<KeyValuePair<string, object>>();
                 for (int i = 0; i < objList.Count; i++)
@@ -556,10 +531,10 @@ namespace DataContext.Relational
                         keyParmStr.Append(",");
                     }
                     keyParmStr.Append($"@P{i}");
-                    parameters.Add(new KeyValuePair<string, object>($"@P{i}", Mapper.GetKeyValue(objList[i])));
+                    parameters.Add(new KeyValuePair<string, object>($"@P{i}", _mapper.GetKeyValue(objList[i])));
                 }
 
-                string cmdStr = $"DELETE FROM {_tablePrefix}{tableName} WHERE {keyName} IN  ({keyParmStr})"; var cmd = CreateCommand(cmdStr, parameters, connection);
+                string cmdStr = $"DELETE FROM {_defaultSchema}{tableName} WHERE {keyName} IN  ({keyParmStr})"; var cmd = CreateCommand(cmdStr, parameters, connection);
                 int result = await cmd.ExecuteNonQueryAsync();
                 IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
                 status.IsSuccess = result == objList.Count;
@@ -584,15 +559,14 @@ namespace DataContext.Relational
         /// <returns>A completion token encapsulating the status indicating the result of the operation</returns>
         public async Task<IStatus<int>> DeleteAllAsync<T, K>(IList<K> keyList)
         {
-            DbConnection connection = null;
-            connection = CreateConnection();
+            DbConnection connection = CreateConnection();
 
             try
             {
 
                 await connection.OpenAsync();
-                string tableName = Mapper.GetObjectMapName(typeof(T));
-                string keyName = Mapper.GetKeyMapName(typeof(T));
+                string tableName = _mapper.GetObjectMapName(typeof(T));
+                string keyName = _mapper.GetKeyMapName(typeof(T));
                 StringBuilder keyParmStr = new StringBuilder();
                 List<KeyValuePair<string, object>> parameters = new List<KeyValuePair<string, object>>();
                 for (int i = 0; i < keyList.Count; i++)
@@ -605,7 +579,7 @@ namespace DataContext.Relational
                     parameters.Add(new KeyValuePair<string, object>($"@P{i}", keyList[i]));
                 }
 
-                string cmdStr = $"DELETE FROM {_tablePrefix}{tableName} WHERE {keyName} IN  ({keyParmStr})";
+                string cmdStr = $"DELETE FROM {_defaultSchema}{tableName} WHERE {keyName} IN  ({keyParmStr})";
                 var cmd = CreateCommand(cmdStr, parameters, connection);
                 int result = await cmd.ExecuteNonQueryAsync();
                 IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
@@ -631,18 +605,17 @@ namespace DataContext.Relational
         /// <returns>A completion token encapsulating the status indicating the result of the operation</returns>
         public async Task<IStatus<int>> DeleteAsync<T>(T obj)
         {
-            DbConnection connection = null;
-            connection = CreateConnection();
+            DbConnection connection = CreateConnection();
 
             try
             {
                 await connection.OpenAsync();
-                string tableName = Mapper.GetObjectMapName(typeof(T));
-                string keyName = Mapper.GetKeyMapName(typeof(T));
+                string tableName = _mapper.GetObjectMapName(typeof(T));
+                string keyName = _mapper.GetKeyMapName(typeof(T));
 
-                string cmdStr = $"DELETE FROM {_tablePrefix}{tableName} WHERE {keyName} = @P0";
+                string cmdStr = $"DELETE FROM {_defaultSchema}{tableName} WHERE {keyName} = @P0";
                 List<KeyValuePair<string, object>> parameters = new List<KeyValuePair<string, object>> {
-                    new KeyValuePair<string, object>( "@P0", Mapper.GetKeyValue(obj))
+                    new KeyValuePair<string, object>( "@P0", _mapper.GetKeyValue(obj))
                 };
                 var cmd = CreateCommand(cmdStr, parameters, connection);
                 int result = await cmd.ExecuteNonQueryAsync();
@@ -670,16 +643,15 @@ namespace DataContext.Relational
         /// <returns>A completion token encapsulating the status indicating the result of the operation</returns>
         public async Task<IStatus<int>> DeleteAsync<T, K>(K key)
         {
-            DbConnection connection = null;
-            connection = CreateConnection();
+            DbConnection connection = CreateConnection();
 
             try
             {
                 await connection.OpenAsync();
-                string tableName = Mapper.GetObjectMapName(typeof(T));
-                string keyName = Mapper.GetKeyMapName(typeof(T));
+                string tableName = _mapper.GetObjectMapName(typeof(T));
+                string keyName = _mapper.GetKeyMapName(typeof(T));
 
-                string cmdStr = $"DELETE FROM {_tablePrefix}{tableName} WHERE {keyName} = @P0";
+                string cmdStr = $"DELETE FROM {_defaultSchema}{tableName} WHERE {keyName} = @P0";
                 List<KeyValuePair<string, object>> parameters = new List<KeyValuePair<string, object>> {
                     new KeyValuePair<string, object>( "@P0", key)
                 };
@@ -707,13 +679,12 @@ namespace DataContext.Relational
         /// <returns>A status indicating result of the operation</returns>
         public IStatus<int> Insert<T>(T obj)
         {
-            DbConnection connection = null;
-            connection = CreateConnection();
+            DbConnection connection = CreateConnection();
 
             try
             {
                 connection.Open();
-                string tableName = Mapper.GetObjectMapName(typeof(T));
+                string tableName = _mapper.GetObjectMapName(typeof(T));
 
                 List<KeyValuePair<string, object>> parameters = TransformObjectToParams(obj);
                 string cmdStr = BuildCommandForInsert(parameters, tableName,0);
@@ -743,13 +714,12 @@ namespace DataContext.Relational
         /// <returns>A status indicating result of the operation</returns>
         public IStatus<int> InsertAll<T>(IList<T> objList)
         {
-            DbConnection connection = null;
-            connection = CreateConnection();
+            DbConnection connection = CreateConnection();
 
             try
             {
                 connection.Open();
-                string tableName = Mapper.GetObjectMapName(typeof(T));
+                string tableName = _mapper.GetObjectMapName(typeof(T));
                 StringBuilder cmdStr = new StringBuilder();
 
                 List<KeyValuePair<string, object>> combinedSqlParam = new List<KeyValuePair<string, object>>();
@@ -788,13 +758,12 @@ namespace DataContext.Relational
         /// <returns>A completion token encapsulating the status indicating the result of the operation</returns>
         public async Task<IStatus<int>> InsertAllAsync<T>(IList<T> objList)
         {
-            DbConnection connection = null;
-            connection = CreateConnection();
+            DbConnection connection = CreateConnection();
 
             try
             {
                 await connection.OpenAsync();
-                string tableName = Mapper.GetObjectMapName(typeof(T));
+                string tableName = _mapper.GetObjectMapName(typeof(T));
                 StringBuilder cmdStr = new StringBuilder();
 
                 List<KeyValuePair<string, object>> combinedSqlParam = new List<KeyValuePair<string, object>>();
@@ -835,13 +804,12 @@ namespace DataContext.Relational
         /// <returns>A completion token encapsulating the status indicating the result of the operation</returns>
         public async Task<IStatus<int>> InsertAsync<T>(T obj)
         {
-            DbConnection connection = null;
-            connection = CreateConnection();
+            DbConnection connection = CreateConnection();
 
             try
             {
                 await connection.OpenAsync();
-                string tableName = Mapper.GetObjectMapName(typeof(T));
+                string tableName = _mapper.GetObjectMapName(typeof(T));
 
                 List<KeyValuePair<string, object>> parameters = TransformObjectToParams(obj);
                 string cmdStr = BuildCommandForInsert(parameters, tableName, 0);
@@ -871,8 +839,7 @@ namespace DataContext.Relational
         /// <returns>A status indicating the result of the operation</returns>
         public IStatus<int> NonQuery(string statement, IDictionary<string, object> parameters)
         {
-            DbConnection connection = null;
-            connection = CreateConnection();
+            DbConnection connection = CreateConnection();
 
             try
             {
@@ -909,8 +876,7 @@ namespace DataContext.Relational
         /// <returns>A completion token encapsulating status indicating the result of the operation</returns>
         public async Task<IStatus<int>> NonQueryAsync(string statement, IDictionary<string, object> parameters)
         {
-            DbConnection connection = null;
-            connection = CreateConnection();
+            DbConnection connection = CreateConnection();
 
             try
             {
@@ -947,8 +913,7 @@ namespace DataContext.Relational
         /// <returns>Matching instances of T</returns>
         public IEnumerable<T> Query<T>(string query, IDictionary<string, object> parameters)
         {
-            DbConnection connection = null;
-            connection = CreateConnection();
+            DbConnection connection = CreateConnection();
 
             try
             {
@@ -964,7 +929,7 @@ namespace DataContext.Relational
                 while(reader.Read())
                 {
                     T record = Util.Container.CreateInstance<T>();
-                    record = Mapper.CreateInstanceFromFields(record,ConvertReaderToKV(reader));
+                    record = _mapper.CreateInstanceFromFields(record,ConvertReaderToKV(reader));
                     yield return record;
                 }
             }
@@ -985,8 +950,7 @@ namespace DataContext.Relational
         /// <returns>Query results with each record's fields encoded as a series of key-value pairs</returns>
         public IEnumerable<IDictionary<string, object>> Query(string query, IDictionary<string, object> parameters)
         {
-            DbConnection connection = null;
-            connection = CreateConnection();
+            DbConnection connection = CreateConnection();
 
             try
             {
@@ -1065,18 +1029,17 @@ namespace DataContext.Relational
         /// <returns>An iterator for traversing the returned records</returns>
         public IEnumerable<T> SelectAll<T>()
         {
-            DbConnection connection = null;
-            connection = CreateConnection();
+            DbConnection connection = CreateConnection();
 
             try
             {
                 connection.Open();
-                var cmd = CreateCommand($"SELECT * FROM {_tablePrefix}{Mapper.GetObjectMapName(typeof(T))}" , null, connection);
+                var cmd = CreateCommand($"SELECT * FROM {_defaultSchema}{_mapper.GetObjectMapName(typeof(T))}" , null, connection);
                 var reader = cmd.ExecuteReader();
                 while (reader.Read())
                 {
                     T record = Util.Container.CreateInstance<T>();
-                    record = Mapper.CreateInstanceFromFields(record, ConvertReaderToKV(reader));
+                    record = _mapper.CreateInstanceFromFields(record, ConvertReaderToKV(reader));
                     yield return record;
                 }
             }
@@ -1135,23 +1098,22 @@ namespace DataContext.Relational
         /// <returns>The record matching the key</returns>
         public T SelectOne<T, K>(K key)
         {
-            DbConnection connection = null;
-            connection = CreateConnection();
+            DbConnection connection = CreateConnection();
 
             try
             {
                 connection.Open();
-                string tableName = Mapper.GetObjectMapName(typeof(T));
-                string keyName = Mapper.GetKeyMapName(typeof(T));
+                string tableName = _mapper.GetObjectMapName(typeof(T));
+                string keyName = _mapper.GetKeyMapName(typeof(T));
 
-                var cmd = CreateCommand($"SELECT TOP 1 * FROM {_tablePrefix}{tableName} WHERE {keyName} = @P0", new List<KeyValuePair<string, object>> { 
+                var cmd = CreateCommand($"SELECT TOP 1 * FROM {_defaultSchema}{tableName} WHERE {keyName} = @P0", new List<KeyValuePair<string, object>> { 
                     new KeyValuePair<string, object>("@P0",key) } , connection);
                 var reader = cmd.ExecuteReader();
 
                 if (reader.Read())
                 {
                     T record = Util.Container.CreateInstance<T>();
-                    record = Mapper.CreateInstanceFromFields(record, ConvertReaderToKV(reader));
+                    record = _mapper.CreateInstanceFromFields(record, ConvertReaderToKV(reader));
                     return record;
                 }
                 return default(T);
@@ -1174,22 +1136,21 @@ namespace DataContext.Relational
         /// <returns>A completion token encapsulating the record matching the key</returns>
         public async Task<T> SelectOneAsync<T, K>(K key)
         {
-            DbConnection connection = null;
-            connection = CreateConnection();
+            DbConnection connection = CreateConnection();
 
             try
             {
                 await connection.OpenAsync();
-                string tableName = Mapper.GetObjectMapName(typeof(T));
-                string keyName = Mapper.GetKeyMapName(typeof(T));
+                string tableName = _mapper.GetObjectMapName(typeof(T));
+                string keyName = _mapper.GetKeyMapName(typeof(T));
 
-                var cmd = CreateCommand($"SELECT TOP 1 * FROM {_tablePrefix}{tableName} WHERE {keyName} = @P0", new List<KeyValuePair<string, object>> {
+                var cmd = CreateCommand($"SELECT TOP 1 * FROM {_defaultSchema}{tableName} WHERE {keyName} = @P0", new List<KeyValuePair<string, object>> {
                     new KeyValuePair<string, object>("@P0",key) }, connection);
                 var reader = await cmd.ExecuteReaderAsync();
                 if (await reader.ReadAsync())
                 {
                     T record = Util.Container.CreateInstance<T>();
-                    record = Mapper.CreateInstanceFromFields(record, ConvertReaderToKV(reader));
+                    record = _mapper.CreateInstanceFromFields(record, ConvertReaderToKV(reader));
                     return record;
                 }
                 return default(T);
@@ -1213,21 +1174,20 @@ namespace DataContext.Relational
         /// <returns>Instances of T within the data page</returns>
         public IEnumerable<T> SelectRange<T>(int from, int length)
         {
-            DbConnection connection = null;
-            connection = CreateConnection();
+            DbConnection connection = CreateConnection();
 
             try
             {
                 connection.Open();
 
-                string tableName = Mapper.GetObjectMapName(typeof(T));
-                string keyName = Mapper.GetKeyMapName(typeof(T));
-                var cmd = CreateCommand($"SELECT * FROM {_tablePrefix}{tableName} {BuildRangeQueryForProvider(from,length,keyName)}", null, connection);
+                string tableName = _mapper.GetObjectMapName(typeof(T));
+                string keyName = _mapper.GetKeyMapName(typeof(T));
+                var cmd = CreateCommand($"SELECT * FROM {_defaultSchema}{tableName} {BuildRangeQueryForProvider(from,length,keyName)}", null, connection);
                 var reader = cmd.ExecuteReader();
                 while (reader.Read())
                 {
                     T record = Util.Container.CreateInstance<T>();
-                    record = Mapper.CreateInstanceFromFields(record, ConvertReaderToKV(reader));
+                    record = _mapper.CreateInstanceFromFields(record, ConvertReaderToKV(reader));
                     yield return record;
                 }
             }
@@ -1262,20 +1222,19 @@ namespace DataContext.Relational
         /// <returns>A status indicating result of the operation</returns>
         public IStatus<int> Update<T>(T obj, bool updateNulls = false)
         {
-            DbConnection connection = null;
-            connection = CreateConnection();
+            DbConnection connection = CreateConnection();
 
             try
             {
                 connection.Open();
 
-                string tableName = Mapper.GetObjectMapName(typeof(T));
-                object key = Mapper.GetKeyValue(obj);
+                string tableName = _mapper.GetObjectMapName(typeof(T));
+                object key = _mapper.GetKeyValue(obj);
                 List<KeyValuePair<string, object>> objParam = TransformObjectToParams(obj, updateNulls);
                 SwapKeyForLast<T>(objParam);
                 List<KeyValuePair<string, object>> sqlParam = TransformToSqlParam(objParam, 0);
                 var cmd = CreateCommand(BuildCommandForUpdate(objParam,tableName,0, 
-                    new KeyValuePair<string,object>(Mapper.GetKeyMapName(typeof(T)), key)), sqlParam, connection);
+                    new KeyValuePair<string,object>(_mapper.GetKeyMapName(typeof(T)), key)), sqlParam, connection);
                 int result = cmd.ExecuteNonQuery();
                 IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
                 status.IsSuccess = result > 0;
@@ -1301,13 +1260,12 @@ namespace DataContext.Relational
         /// <returns>A status indicating result of the operation</returns>
         public IStatus<int> UpdateAll<T>(IList<T> objList, bool updateNulls = false)
         {
-            DbConnection connection = null;
-            connection = CreateConnection();
+            DbConnection connection = CreateConnection();
 
             try
             {
                 connection.Open();
-                string tableName = Mapper.GetObjectMapName(typeof(T));
+                string tableName = _mapper.GetObjectMapName(typeof(T));
                 StringBuilder cmdStr = new StringBuilder();
 
                 List<KeyValuePair<string, object>> combinedSqlParam = new List<KeyValuePair<string, object>>();
@@ -1316,7 +1274,7 @@ namespace DataContext.Relational
                     List<KeyValuePair<string, object>> parameters = TransformObjectToParams(obj,updateNulls);
                     SwapKeyForLast<T>(parameters);
                     cmdStr.Append(BuildCommandForUpdate(parameters, tableName, combinedSqlParam.Count,
-                        new KeyValuePair<string, object>(Mapper.GetKeyMapName(typeof(T)), Mapper.GetKeyValue(obj))) + ";\n");
+                        new KeyValuePair<string, object>(_mapper.GetKeyMapName(typeof(T)), _mapper.GetKeyValue(obj))) + ";\n");
                     List<KeyValuePair<string, object>> sqlParams = TransformToSqlParam(parameters, combinedSqlParam.Count);
                     foreach (var param in sqlParams)
                     {
@@ -1349,13 +1307,12 @@ namespace DataContext.Relational
         /// <returns>A completion token encapsulating the status indicating the result of the operation</returns>
         public async Task<IStatus<int>> UpdateAllAsync<T>(IList<T> objList, bool updateNulls = false)
         {
-            DbConnection connection = null;
-            connection = CreateConnection();
+            DbConnection connection = CreateConnection();
 
             try
             {
                 await connection.OpenAsync();
-                string tableName = Mapper.GetObjectMapName(typeof(T));
+                string tableName = _mapper.GetObjectMapName(typeof(T));
                 StringBuilder cmdStr = new StringBuilder();
 
                 List<KeyValuePair<string, object>> combinedSqlParam = new List<KeyValuePair<string, object>>();
@@ -1364,7 +1321,7 @@ namespace DataContext.Relational
                     List<KeyValuePair<string, object>> parameters = TransformObjectToParams(obj, updateNulls);
                     SwapKeyForLast<T>(parameters);
                     cmdStr.Append(BuildCommandForUpdate(parameters, tableName, combinedSqlParam.Count,
-                        new KeyValuePair<string, object>(Mapper.GetKeyMapName(typeof(T)), Mapper.GetKeyValue(obj))) + ";\n");
+                        new KeyValuePair<string, object>(_mapper.GetKeyMapName(typeof(T)), _mapper.GetKeyValue(obj))) + ";\n");
                     List<KeyValuePair<string, object>> sqlParams = TransformToSqlParam(parameters, combinedSqlParam.Count);
                     foreach (var param in sqlParams)
                     {
@@ -1399,20 +1356,19 @@ namespace DataContext.Relational
         /// <returns>A completion token encapsulating the status indicating the result of the operation</returns>
         public async Task<IStatus<int>> UpdateAsync<T>(T obj, bool updateNulls = false)
         {
-            DbConnection connection = null;
-            connection = CreateConnection();
+            DbConnection connection = CreateConnection();
 
             try
             {
                 await connection.OpenAsync();
 
-                string tableName = Mapper.GetObjectMapName(typeof(T));
-                object key = Mapper.GetKeyValue(obj);
+                string tableName = _mapper.GetObjectMapName(typeof(T));
+                object key = _mapper.GetKeyValue(obj);
                 List<KeyValuePair<string, object>> objParam = TransformObjectToParams(obj, updateNulls);
                 SwapKeyForLast<T>(objParam);
                 List<KeyValuePair<string, object>> sqlParam = TransformToSqlParam(objParam, 0);
                 var cmd = CreateCommand(BuildCommandForUpdate(objParam, tableName, 0,
-                    new KeyValuePair<string, object>(Mapper.GetKeyMapName(typeof(T)), key)), sqlParam, connection);
+                    new KeyValuePair<string, object>(_mapper.GetKeyMapName(typeof(T)), key)), sqlParam, connection);
                 int result = await cmd.ExecuteNonQueryAsync();
                 IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
                 status.IsSuccess = result > 0;
@@ -1468,13 +1424,13 @@ namespace DataContext.Relational
             // TODO: uncomment the following line if the finalizer is overridden above.
             // GC.SuppressFinalize(this);
         }
-
+        #endregion
         public int Count<T>()
         {
             DbConnection connection = CreateConnection();
             try
             {
-                DbCommand command = CreateCommand($"SELECT COUNT(1) FROM {_tablePrefix}{Mapper.GetObjectMapName(typeof(T))}",
+                DbCommand command = CreateCommand($"SELECT COUNT(1) FROM {_defaultSchema}{_mapper.GetObjectMapName(typeof(T))}",
                    null, connection);
                 var reader = command.ExecuteReader();
                 if (reader.Read())
@@ -1498,7 +1454,7 @@ namespace DataContext.Relational
             DbConnection connection = CreateConnection();
             try
             {
-                DbCommand command = CreateCommand($"SELECT COUNT(1) FROM {_tablePrefix}{Mapper.GetObjectMapName(typeof(T))}",
+                DbCommand command = CreateCommand($"SELECT COUNT(1) FROM {_defaultSchema}{_mapper.GetObjectMapName(typeof(T))}",
                    null, connection);
                 var reader = await command.ExecuteReaderAsync();
                 if (await reader.ReadAsync())
@@ -1516,7 +1472,7 @@ namespace DataContext.Relational
             }
             return 0;
         }
-        #endregion
+     
 
     }
 }

@@ -1,4 +1,5 @@
-﻿using System;
+﻿
+using System;
 using System.Collections.Generic;
 using System.Linq.Expressions;
 using System.Threading.Tasks;
@@ -12,38 +13,9 @@ namespace Framework.Interfaces
     {
 
         /// <summary>
-        /// A reference to a data mapper component required to map query results to concrete objects
-        /// </summary>
-        IDataMapper Mapper { get; set; }
-
-
-        /// <summary>
-        /// A reference to a configuration component used to access config settings required by the data provider
-        /// </summary>
-        IConfiguration Config { get; set; }
-
-        /// <summary>
-        /// A flag to indicate if changes made should be automatically committed to data source or not (if applicable).
-        /// This should be set in a config file if using dependency injection
-        /// </summary>
-        bool AutoCommit { get; set; }
-
-        /// <summary>
-        /// Specifies the database name of data source where applicable (typically in document based databases)
-        /// </summary>
-        string DBName { get; set; }
-
-        /// <summary>
         /// Connects data provider to its source
         /// </summary>
         void Connect();
-
-
-        /// <summary>
-        /// Connects data provider to its source addressed by supplied connection string
-        /// </summary>
-        /// <param name="str">Connection string</param>
-        void Connect(string str);
 
         /// <summary>
         /// Commits data transaction to data source if applicable

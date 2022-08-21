@@ -1,11 +1,11 @@
 ﻿using Framework.Interfaces;
+using Framework.Interfaces.Configs;
 using Framework.Utils;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization;
 using MongoDB.Driver;
 using System;
 using System.Collections.Generic;
-using System.Composition;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Threading.Tasks;
@@ -15,7 +15,7 @@ namespace DataContext.NoSql.MongoDB
     /// <summary>
     /// A concrete implementation of the IDataContext interface for mongo DB
     /// </summary>
-    [Export("Mongo",typeof(IDataContext))]
+
     public class MongoDBDataContext : IDataContext
     {
         private string _connectionString;
@@ -34,7 +34,7 @@ namespace DataContext.NoSql.MongoDB
         private IMongoCollection<T> GetCollectionForType<T>()
         {
             var db = _client.GetDatabase(DBName);
-            string collectionName = Mapper.GetObjectMapName(typeof(T));
+            string collectionName = _mapper.GetObjectMapName(typeof(T));
             return db.GetCollection<T>(collectionName);
         }
 
@@ -46,7 +46,7 @@ namespace DataContext.NoSql.MongoDB
         private IMongoCollection<BsonDocument> GetDocumentCollection<T>()
         {
             var db = _client.GetDatabase(DBName);
-            string collectionName = Mapper.GetObjectMapName(typeof(T));
+            string collectionName = _mapper.GetObjectMapName(typeof(T));
             return db.GetCollection<BsonDocument>(collectionName);
         }
 
@@ -59,7 +59,7 @@ namespace DataContext.NoSql.MongoDB
         private FilterDefinition<T> BuildFilterDefinitionForObject<T>(T obj)
         {
             var builder = Builders<T>.Filter;
-            return builder.Eq(x => Mapper.GetKeyValue(x).ToString(), Mapper.GetKeyValue(obj).ToString());
+            return builder.Eq(x => _mapper.GetKeyValue(x).ToString(), _mapper.GetKeyValue(obj).ToString());
         }
 
        
@@ -86,20 +86,16 @@ namespace DataContext.NoSql.MongoDB
             return new JsonCommand<BsonDocument>(query);
         }
 
-   
+
         #endregion
 
 
         /// <summary>
         /// A reference to a data mapper component required to map query results to concrete objects
         /// </summary>
-        [Import]
-        public IDataMapper Mapper { get; set; }
+        private IDataMapper _mapper;
 
-        /// <summary>
-        /// A reference to a configuration component used to access config settings required by the data provider
-        /// </summary>
-        public IConfiguration Config { get; set; }
+
 
         /// <summary>
         /// A flag to indicate if changes made should be automatically committed to data source or not (if applicable).
@@ -113,14 +109,17 @@ namespace DataContext.NoSql.MongoDB
         public string DBName { get; set; }
 
         /// <summary>
-        /// Cosntructs an instance of this class based on configuration values
+        /// Constructs an instance of this class with require dependencies
+        /// <paramref name="connection">An instance encapsulating parameters for establishing a connection</paramref>
+        /// <paramref name="mapper">An instance of a data mapper for mapping query results to concrete DTO objects</paramref>
         /// </summary>
-        [ImportingConstructor]
-        public MongoDBDataContext([Import("JsonConfig")] IConfiguration config)
+
+        public MongoDBDataContext(IDocumentConnection connection,IDataMapper mapper)
         {
-            Config = config;
-            DBName = Config.GetValue(ConfigConstants.DEFAULT_MONGODB_DATABASE);
-            AutoCommit = Config.GetValue(ConfigConstants.MONGODB_AUTOCOMMIT) == "1";
+            _mapper = mapper;
+            _connectionString = connection.ConnectionString;
+            DBName = connection.DbName;
+            AutoCommit = connection.IsAutoCommit;
             
         }
 
@@ -146,29 +145,15 @@ namespace DataContext.NoSql.MongoDB
         {
             if (_client == null)
             {
-                Connect(Config.GetValue(ConfigConstants.MONGODB_CONNECTION_STRING));
-            }
-        }
-
-
-        /// <summary>
-        /// Connects data provider to its source addressed by supplied connection string
-        /// </summary>
-        /// <param name="str">Connection string</param>
-        public virtual void Connect(string str)
-        {
-            if (_client == null)
-            {
-                _connectionString = str;
                 _client = new MongoClient(_connectionString);
                 if (!AutoCommit)
                 {
                     _transSession = _client.StartSession();
                 }
             }
-            
-           
+
         }
+
 
 
         /// <summary>
@@ -180,7 +165,7 @@ namespace DataContext.NoSql.MongoDB
         public IStatus<int> Delete<T>(T obj)
         {
             Connect();
-            var result = GetDocumentCollection<T>().DeleteOne(new BsonDocument("_id", Mapper.GetKeyValue(obj).ToString()));
+            var result = GetDocumentCollection<T>().DeleteOne(new BsonDocument("_id", _mapper.GetKeyValue(obj).ToString()));
             IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
             status.IsSuccess = result.IsAcknowledged;
             status.StatusInfo = (int)result.DeletedCount;
@@ -219,9 +204,9 @@ namespace DataContext.NoSql.MongoDB
 
             foreach(T obj in objList)
             {
-                keyList.Add(Mapper.GetKeyValue(obj).ToString());
+                keyList.Add(_mapper.GetKeyValue(obj).ToString());
             }
-            var result = GetCollectionForType<T>().DeleteMany<T>( x => keyList.Contains( Mapper.GetKeyValue(x).ToString()));
+            var result = GetCollectionForType<T>().DeleteMany<T>( x => keyList.Contains( _mapper.GetKeyValue(x).ToString()));
             IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
             status.IsSuccess = result.IsAcknowledged;
             status.StatusInfo = (int)result.DeletedCount;
@@ -238,7 +223,7 @@ namespace DataContext.NoSql.MongoDB
         public IStatus<int> DeleteAll<T, K>(IList<K> keyList)
         {
             Connect();
-            var result = GetCollectionForType<T>().DeleteMany<T>(x => keyList.Contains((K)Mapper.GetKeyValue(x)));
+            var result = GetCollectionForType<T>().DeleteMany<T>(x => keyList.Contains((K)_mapper.GetKeyValue(x)));
             IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
             status.IsSuccess = result.IsAcknowledged;
             status.StatusInfo = (int)result.DeletedCount;
@@ -259,9 +244,9 @@ namespace DataContext.NoSql.MongoDB
 
             foreach(T obj in objList)
             {
-                keyList.Add(Mapper.GetKeyValue(obj).ToString());
+                keyList.Add(_mapper.GetKeyValue(obj).ToString());
             }
-            var result = await GetCollectionForType<T>().DeleteManyAsync<T>( x => keyList.Contains( Mapper.GetKeyValue(x).ToString()));
+            var result = await GetCollectionForType<T>().DeleteManyAsync<T>( x => keyList.Contains( _mapper.GetKeyValue(x).ToString()));
             IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
             status.IsSuccess = result.IsAcknowledged;
             status.StatusInfo = (int)result.DeletedCount;
@@ -279,7 +264,7 @@ namespace DataContext.NoSql.MongoDB
         public async Task<IStatus<int>> DeleteAllAsync<T, K>(IList<K> keyList)
         {
             Connect();
-            var result =await GetCollectionForType<T>().DeleteManyAsync<T>(x => keyList.Contains((K)Mapper.GetKeyValue(x)));
+            var result =await GetCollectionForType<T>().DeleteManyAsync<T>(x => keyList.Contains((K)_mapper.GetKeyValue(x)));
             IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
             status.IsSuccess = result.IsAcknowledged;
             status.StatusInfo = (int)result.DeletedCount;
@@ -296,7 +281,7 @@ namespace DataContext.NoSql.MongoDB
         public async Task<IStatus<int>> DeleteAsync<T>(T obj)
         {
             Connect();
-            var result = await GetDocumentCollection<T>().DeleteOneAsync(new BsonDocument("_id",Mapper.GetKeyValue(obj).ToString()));
+            var result = await GetDocumentCollection<T>().DeleteOneAsync(new BsonDocument("_id",_mapper.GetKeyValue(obj).ToString()));
             IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
             status.IsSuccess = result.IsAcknowledged;
             status.StatusInfo = (int)result.DeletedCount;
@@ -621,9 +606,9 @@ namespace DataContext.NoSql.MongoDB
         {
             Connect();
             var collection = GetDocumentCollection<T>();
-            string keyString = Mapper.GetKeyValue(obj).ToString();
+            string keyString = _mapper.GetKeyValue(obj).ToString();
             T record = SelectOne<T,string>(keyString);
-            Util.DeepCopy(obj, record, !updateNulls, Mapper.GetKeyName(typeof(T)));
+            Util.DeepCopy(obj, record, !updateNulls, _mapper.GetKeyName(typeof(T)));
             var result = collection.ReplaceOne(new BsonDocument("_id", keyString), record.ToBsonDocument());
             IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
             status.IsSuccess = result.IsAcknowledged;
@@ -697,9 +682,9 @@ namespace DataContext.NoSql.MongoDB
         {
             Connect();
             var collection = GetDocumentCollection<T>();
-            string keyString = Mapper.GetKeyValue(obj).ToString();
+            string keyString = _mapper.GetKeyValue(obj).ToString();
             T record = await SelectOneAsync<T, string>(keyString);
-            Util.DeepCopy(obj, record, !updateNulls, Mapper.GetKeyName(typeof(T)));
+            Util.DeepCopy(obj, record, !updateNulls, _mapper.GetKeyName(typeof(T)));
             var result = await collection.ReplaceOneAsync(new BsonDocument("_id", keyString), record.ToBsonDocument());
             IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
             status.IsSuccess = result.IsAcknowledged;
