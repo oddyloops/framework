@@ -1,5 +1,4 @@
 ﻿using System.Collections.Generic;
-using System.Composition;
 using System.Net.Sockets;
 using Framework.Common.Items;
 
@@ -9,7 +8,6 @@ namespace Framework.Common.Impl.Items
     /// A concrete implementation of INetworkNode that encapsulates details
     /// about a single network node
     /// </summary>
-    [Export(typeof(INetworkNode))]
     public class NetworkNode : INetworkNode
     {
         /// <summary>
