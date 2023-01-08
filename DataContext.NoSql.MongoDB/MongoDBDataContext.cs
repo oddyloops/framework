@@ -62,7 +62,7 @@ namespace DataContext.NoSql.MongoDB
             return builder.Eq(x => _mapper.GetKeyValue(x).ToString(), _mapper.GetKeyValue(obj).ToString());
         }
 
-       
+
 
         /// <summary>
         /// Helper method for builing a jsoncommand object from a raw mongo db command string
@@ -70,11 +70,11 @@ namespace DataContext.NoSql.MongoDB
         /// <param name="query">Command string</param>
         /// <param name="parameters">Command parameters</param>
         /// <returns>JsonCommand object wrapping the parameterized mongodb command</returns>
-        private static JsonCommand<BsonDocument> BuildCommandObject(string query,IDictionary<string,object> parameters)
+        private static JsonCommand<BsonDocument> BuildCommandObject(string query, IDictionary<string, object> parameters)
         {
-            foreach(var parm in parameters)
+            foreach (var parm in parameters)
             {
-                if(parm.Value is string || parm.Value is DateTime)
+                if (parm.Value is string || parm.Value is DateTime)
                 {
                     query = query.Replace(parm.Key, $"'{parm.Value.ToString()}'");
                 }
@@ -114,13 +114,13 @@ namespace DataContext.NoSql.MongoDB
         /// <paramref name="mapper">An instance of a data mapper for mapping query results to concrete DTO objects</paramref>
         /// </summary>
 
-        public MongoDBDataContext(IDocumentConnection connection,IDataMapper mapper)
+        public MongoDBDataContext(IDocumentConnection connection, IDataMapper mapper)
         {
             _mapper = mapper;
             _connectionString = connection.ConnectionString;
             DBName = connection.DbName;
             AutoCommit = connection.IsAutoCommit;
-            
+
         }
 
 
@@ -129,8 +129,8 @@ namespace DataContext.NoSql.MongoDB
         /// </summary>
         public void Commit()
         {
-            
-            if(!AutoCommit)
+
+            if (!AutoCommit)
             {
                 _transSession.CommitTransaction();
                 _transSession = _client.StartSession();
@@ -202,11 +202,11 @@ namespace DataContext.NoSql.MongoDB
             Connect();
             IList<string> keyList = new List<string>(objList.Count);
 
-            foreach(T obj in objList)
+            foreach (T obj in objList)
             {
                 keyList.Add(_mapper.GetKeyValue(obj).ToString());
             }
-            var result = GetCollectionForType<T>().DeleteMany<T>( x => keyList.Contains( _mapper.GetKeyValue(x).ToString()));
+            var result = GetCollectionForType<T>().DeleteMany<T>(x => keyList.Contains(_mapper.GetKeyValue(x).ToString()));
             IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
             status.IsSuccess = result.IsAcknowledged;
             status.StatusInfo = (int)result.DeletedCount;
@@ -242,11 +242,11 @@ namespace DataContext.NoSql.MongoDB
             Connect();
             IList<string> keyList = new List<string>(objList.Count);
 
-            foreach(T obj in objList)
+            foreach (T obj in objList)
             {
                 keyList.Add(_mapper.GetKeyValue(obj).ToString());
             }
-            var result = await GetCollectionForType<T>().DeleteManyAsync<T>( x => keyList.Contains( _mapper.GetKeyValue(x).ToString()));
+            var result = await GetCollectionForType<T>().DeleteManyAsync<T>(x => keyList.Contains(_mapper.GetKeyValue(x).ToString()));
             IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
             status.IsSuccess = result.IsAcknowledged;
             status.StatusInfo = (int)result.DeletedCount;
@@ -264,7 +264,7 @@ namespace DataContext.NoSql.MongoDB
         public async Task<IStatus<int>> DeleteAllAsync<T, K>(IList<K> keyList)
         {
             Connect();
-            var result =await GetCollectionForType<T>().DeleteManyAsync<T>(x => keyList.Contains((K)_mapper.GetKeyValue(x)));
+            var result = await GetCollectionForType<T>().DeleteManyAsync<T>(x => keyList.Contains((K)_mapper.GetKeyValue(x)));
             IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
             status.IsSuccess = result.IsAcknowledged;
             status.StatusInfo = (int)result.DeletedCount;
@@ -281,7 +281,7 @@ namespace DataContext.NoSql.MongoDB
         public async Task<IStatus<int>> DeleteAsync<T>(T obj)
         {
             Connect();
-            var result = await GetDocumentCollection<T>().DeleteOneAsync(new BsonDocument("_id",_mapper.GetKeyValue(obj).ToString()));
+            var result = await GetDocumentCollection<T>().DeleteOneAsync(new BsonDocument("_id", _mapper.GetKeyValue(obj).ToString()));
             IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
             status.IsSuccess = result.IsAcknowledged;
             status.StatusInfo = (int)result.DeletedCount;
@@ -319,7 +319,7 @@ namespace DataContext.NoSql.MongoDB
             var collection = GetCollectionForType<T>();
             collection.InsertOne(obj);
             IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
-            status.IsSuccess =true;
+            status.IsSuccess = true;
             status.StatusInfo = 1;
             return status;
         }
@@ -424,7 +424,7 @@ namespace DataContext.NoSql.MongoDB
         {
             Connect();
             var result = _client.GetDatabase(DBName).RunCommand(BuildCommandObject(query, parameters));
-            foreach(var item in result.AsBsonArray)
+            foreach (var item in result.AsBsonArray)
             {
                 yield return BsonSerializer.Deserialize<T>(item.AsBsonDocument);
             }
@@ -478,7 +478,7 @@ namespace DataContext.NoSql.MongoDB
         /// </summary>
         public void RollBack()
         {
-            if(!AutoCommit)
+            if (!AutoCommit)
             {
                 _transSession.AbortTransaction();
                 _transSession = _client.StartSession();
@@ -548,7 +548,7 @@ namespace DataContext.NoSql.MongoDB
         {
             Connect();
             var collection = GetDocumentCollection<T>();
-            var result = collection.Find(new BsonDocument ( "_id", key.ToString())).FirstOrDefault();
+            var result = collection.Find(new BsonDocument("_id", key.ToString())).FirstOrDefault();
             return result == null ? default : BsonSerializer.Deserialize<T>(result);
         }
 
@@ -607,7 +607,7 @@ namespace DataContext.NoSql.MongoDB
             Connect();
             var collection = GetDocumentCollection<T>();
             string keyString = _mapper.GetKeyValue(obj).ToString();
-            T record = SelectOne<T,string>(keyString);
+            T record = SelectOne<T, string>(keyString);
             Util.DeepCopy(obj, record, !updateNulls, _mapper.GetKeyName(typeof(T)));
             var result = collection.ReplaceOne(new BsonDocument("_id", keyString), record.ToBsonDocument());
             IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
@@ -631,12 +631,12 @@ namespace DataContext.NoSql.MongoDB
             foreach (T obj in objList)
             {
                 var result = Update(obj, updateNulls);
-                if(result.IsSuccess)
+                if (result.IsSuccess)
                 {
                     updateCount++;
                 }
             }
-         
+
             IStatus<int> status = Util.Container.CreateInstance<IStatus<int>>();
             status.IsSuccess = updateCount == objList.Count;
             status.StatusInfo = updateCount;
@@ -726,12 +726,26 @@ namespace DataContext.NoSql.MongoDB
             // GC.SuppressFinalize(this);
         }
 
+
+        #endregion
+
+        #region UnSupported 
         public int Count<T>()
         {
             throw new NotImplementedException();
         }
 
         public Task<int> CountAsync<T>()
+        {
+            throw new NotImplementedException();
+        }
+
+        public Task<IStatus<int>> PatchAddAsync<T, K, C>(K key, string patchPath, IList<C> childItems)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Task<IStatus<int>> PatchRemoveAsync<T, K, C>(K key, string patchPath, Expression<Func<C, bool>> condition)
         {
             throw new NotImplementedException();
         }

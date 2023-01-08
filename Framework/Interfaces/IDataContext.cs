@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq.Expressions;
+using System.Reflection.Metadata.Ecma335;
 using System.Threading.Tasks;
 
 namespace Framework.Interfaces
@@ -305,6 +306,29 @@ namespace Framework.Interfaces
         /// <returns>A completion token encapsulating status indicating the result of the operation</returns>
         Task<IStatus<int>> NonQueryAsync(string statement, IDictionary<string, object> parameters);
 
+        /// <summary>
+        /// Adds list of child items to existing child collection
+        /// </summary>
+        /// <typeparam name="T">Parent type</typeparam>
+        /// <typeparam name="C">Child type</typeparam>
+        /// <typeparam name="K">Parent key type</typeparam>
+        /// <param name="key">Parent key</param>
+        /// <param name="patchPath">Patch path</param>
+        /// <param name="childItems">Child items to add</param>
+        /// <returns>A completion token encapsulating status indicating the result of the operation</returns>
+        Task<IStatus<int>> PatchAddAsync<T,K,C>(K key, string patchPath, IList<C> childItems);
+
+        /// <summary>
+        /// Deletes an item from the child collection
+        /// </summary>
+        /// <typeparam name="T">Parent type</typeparam>
+        /// <typeparam name="C">Child type</typeparam>
+        /// <typeparam name="K">Parent key type</typeparam>
+        /// <param name="key">Parent key</param>
+        /// <param name="patchPath">Patch path</param>
+        /// <param name="condition">Condition for filtering child item</param>
+        /// <returns>A completion token encapsulating status indicating the result of the operation</returns>
+        Task<IStatus<int>> PatchRemoveAsync<T,K,C>(K key, string patchPath, Expression<Func<C,bool>> condition);
 
     }
 }
