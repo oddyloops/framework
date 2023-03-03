@@ -10,7 +10,7 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Composition" Version="1.0.31" />
     <PackageReference Include="MongoDB.Bson" Version="2.11.4" />
-    <PackageReference Include="MongoDB.Driver" Version="2.11.4" />
+    <PackageReference Include="MongoDB.Driver" Version="2.19.0" />
   </ItemGroup>
 
   <ItemGroup>
