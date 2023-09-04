@@ -48,6 +48,14 @@ namespace Framework.Common.Services
         Task<IStatus<int>> UploadFilesAsync(string[] sourceFiles, string dest);
 
         /// <summary>
+        /// Streams a file upstream to the file server
+        /// </summary>
+        /// <param name="stream">File stream</param>
+        /// <param name="dest">Destination file on file server</param>
+        /// <returns>A status indicating the success/failure of operation</returns>
+        Task<IStatus<int>> UploadStreamAsync(Stream stream, string dest);
+
+        /// <summary>
         /// Deletes a directory from the file server
         /// </summary>
         /// <param name="directory">Directory to delete</param>

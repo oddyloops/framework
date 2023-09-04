@@ -365,5 +365,25 @@ namespace Framework.Common.Impl.Services
             }
             return Task.FromResult(results);
         }
+
+        /// <summary>
+        /// Streams a file upstream to the file server
+        /// </summary>
+        /// <param name="stream">File stream</param>
+        /// <param name="dest">Destination file on file server</param>
+        /// <returns>A status indicating the success/failure of operation</returns>
+        public Task<IStatus<int>> UploadStreamAsync(Stream stream, string dest)
+        {
+            using (var client = NewClient())
+            {
+                client.Connect();
+                client.UploadFile(stream, dest);
+                client.Disconnect();
+            }
+            IStatus<int> result = Util.Container.CreateInstance<IStatus<int>>();
+            result.IsSuccess = true;
+            result.StatusInfo = 1;
+            return Task.FromResult(result);
+        }
     }
 }

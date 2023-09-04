@@ -2,6 +2,8 @@
 using Framework.Interfaces;
 using Framework.Utils;
 using System;
+using System.Collections;
+using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
@@ -21,7 +23,7 @@ namespace Framework.Common.Impl.Services
         /// <summary>
         /// Fraction2 is (1 - percent1)
         /// </summary>
-        private Color BlendPixels(Color pixel1, float fraction1, Color pixel2)
+        private static Color BlendPixels(Color pixel1, float fraction1, Color pixel2)
         {
             float fraction2 = 1 - fraction1;
             byte r = (byte)(pixel1.R * fraction1 + pixel2.R * fraction2);
@@ -31,202 +33,171 @@ namespace Framework.Common.Impl.Services
             return result;
         }
 
-        public IStatus<int> GenerateAllSizes(string imageFilePath)
+        /// <summary>
+        /// Genrates all three sizes of an image (small, big, medium) while maintaining
+        /// aspect ratio.
+        /// </summary>
+        /// <param name="imageData">Image binary data</param>
+        /// <returns>A map of size and corresponding binary image data. Map keys are:
+        /// icon,small,medium,big</returns>
+        public IDictionary<string,byte[]> GenerateAllSizes(byte[] imageData)
         {
-            GenerateBig(imageFilePath);
-            GenerateMedium(imageFilePath);
-            GenerateSmall(imageFilePath);
-            IStatus<int> result = Util.Container.CreateInstance<IStatus<int>>();
-            result.IsSuccess = true;
-            result.StatusInfo = 3;
-            return result;
+            IDictionary<string, byte[]> output = new Dictionary<string, byte[]>();
+            output.Add("big",GenerateBig(imageData));
+            output.Add("medium",GenerateMedium(imageData));
+            output.Add("small",GenerateSmall(imageData));
+            output.Add("icon", GenerateIcon(imageData));
+            return output;
         }
 
         /// <summary>
         /// Generates a large image from the given image file. 
-        /// (No-Op if image > 720p)
         /// Images are generated in the same folder with source along with their size suffixed to
         /// their names
         /// </summary>
-        /// <param name="imageFilePath">Image file path</param>
-        /// <returns>A status indicating the file path of generated image</returns>
-        public IStatus<string> GenerateBig(string imageFilePath)
+        /// <param name="imageData">Image binary data</param>
+        /// <returns>Large image binary data</returns>
+        public byte[] GenerateBig(byte[] imageData)
         {
-            string genImagePath = $"{Path.GetDirectoryName(imageFilePath)}/{Path.GetFileNameWithoutExtension(imageFilePath)}" +
-                $".big.jpg";
+           
             int height = 0;
-            using (var image = Image.FromFile(imageFilePath))
+            using (var image = Image.FromStream(new MemoryStream(imageData)))
             {
                 height = image.Height;
             }
             if (height > MIN_BIG)
             {
                 //simple copy
-                File.Copy(imageFilePath, genImagePath);
+                return imageData;
             }
             else
             {
-                QuickSharpen(imageFilePath, genImagePath);
+                return QuickSharpen(imageData);
             }
 
-            IStatus<string> result = Util.Container.CreateInstance<IStatus<string>>();
-            result.IsSuccess = true;
-            result.StatusInfo = genImagePath;
-            return result;
+        
         }
 
 
         /// <summary>
         /// Generates an icon size image 
-        /// (No-Op if image < 50p)
-        /// Images are generated in the same folder with source along with their size suffixed to
-        /// their names
         /// </summary>
-        /// <param name="imageFilePath">Original image file path</param>
-        /// <returns>A status indicatng the success of the operation</returns>
-        public IStatus<string> GenerateIcon(string imageFilePath)
-        {
-            string genImagePath = $"{Path.GetDirectoryName(imageFilePath)}/{Path.GetFileNameWithoutExtension(imageFilePath)}" +
-               $".icon.jpg";
+        /// <param name="imageData">Image binary data</param>
+        /// <returns>Icon image binary data</returns>
+        public byte[] GenerateIcon(byte[] imageData)
+        { 
             int height = 0;
-            using (var image = Image.FromFile(imageFilePath))
+            using (var image = Image.FromStream(new MemoryStream(imageData)))
             {
                 height = image.Height;
             }
             if (height < MIN_SMALL)
             {
                 //simple copy
-                File.Copy(imageFilePath, genImagePath);
+                return imageData;
             }
             else
             {
-                QuickBlur(imageFilePath, genImagePath);
+                return QuickBlur(imageData);
             }
-
-            IStatus<string> result = Util.Container.CreateInstance<IStatus<string>>();
-            result.IsSuccess = true;
-            result.StatusInfo = genImagePath;
-            return result;
 
         }
 
         /// <summary>
         /// Generates a medium sized image from the given image file. 
-        /// (No-Op if image <= 720p && > 320p)
         /// Images are generated in the same folder with source along with their size suffixed to
         /// their names
         /// </summary>
-        /// <param name="imageFilePath">Image file path</param>
-        /// <returns>A status indicating the file path of generated image</returns>
-        public IStatus<string> GenerateMedium(string imageFilePath)
+        /// <param name="imageData">Image binary data</param>
+        /// <returns>Medium image binary data</returns>
+        public byte[] GenerateMedium(byte[] imageData)
         {
-            string genImagePath = $"{Path.GetDirectoryName(imageFilePath)}/{Path.GetFileNameWithoutExtension(imageFilePath)}" +
-               $".medium.jpg";
+        
             int height = 0;
-            using (var image = Image.FromFile(imageFilePath))
+            using (var image = Image.FromStream(new MemoryStream(imageData)))
             {
                 height = image.Height;
             }
             if (height <= MIN_BIG && height > MIN_MEDIUM)
             {
                 //simple copy
-                File.Copy(imageFilePath, genImagePath);
+                return imageData;
             }
-            else if(height <= MIN_MEDIUM)
+            else if (height <= MIN_MEDIUM)
             {
-                QuickSharpen(imageFilePath, genImagePath);
+                return QuickSharpen(imageData);
             }
             else
             {
-                QuickBlur(imageFilePath, genImagePath);
+                return QuickBlur(imageData);
             }
-
-            IStatus<string> result = Util.Container.CreateInstance<IStatus<string>>();
-            result.IsSuccess = true;
-            result.StatusInfo = genImagePath;
-            return result;
 
         }
 
         /// <summary>
         /// Generates a small image from the given image file. 
-        /// (No-Op if image <= 320p)
-        /// Images are generated in the same folder with source along with their size suffixed to
-        /// their names
-        /// </summary>
-        /// <param name="imageFilePath">Image file path</param>
-        /// <returns>A status indicating the file path of generated image</returns>
-        public IStatus<string> GenerateSmall(string imageFilePath)
+        /// <param name="imageData">Image binary data</param>
+        /// <returns>Small image binary data</returns>
+        public byte[] GenerateSmall(byte[] imageData)
         {
-            string genImagePath = $"{Path.GetDirectoryName(imageFilePath)}/{Path.GetFileNameWithoutExtension(imageFilePath)}" +
-               $".small.jpg";
             int height = 0;
-            using (var image = Image.FromFile(imageFilePath))
+            using (var image = Image.FromStream(new MemoryStream(imageData)))
             {
                 height = image.Height;
             }
             if (height <= MIN_MEDIUM && height > MIN_SMALL)
             {
                 //simple copy
-                File.Copy(imageFilePath, genImagePath);
+                return imageData;
             }
             else if (height <= MIN_SMALL)
             {
-                QuickSharpen(imageFilePath, genImagePath);
+                return QuickSharpen(imageData);
             }
             else
             {
-                QuickBlur(imageFilePath, genImagePath);
+                return QuickBlur(imageData);
             }
-
-            IStatus<string> result = Util.Container.CreateInstance<IStatus<string>>();
-            result.IsSuccess = true;
-            result.StatusInfo = genImagePath;
-            return result;
         }
 
+
         /// <summary>
-        /// Blurs an image by a scale of 0.3, by selecting central pixels only
+        /// Blurs an image by with a naive rudimentary algorithm
         /// </summary>
-        /// <param name="imageFilePath">Image file path</param>
-        /// <param name="generatedImagePath">Sharpened image file path</param>
-        /// <returns>A status indicating the file path of generated image</returns>
-        public IStatus<string> QuickBlur(string imageFilePath, string generatedImagePath)
+        /// <param name="imageData">Image binary data</param>
+        /// <returns>Blurred image bianry data</returns>
+        public byte[] QuickBlur(byte[] imageData)
         {
-            using(Bitmap source = new Bitmap(imageFilePath))
-            using(Bitmap generated = new Bitmap((int)Math.Ceiling(0.33 * source.Width),
-                (int)Math.Ceiling(0.33 * source.Height)))
+            using Bitmap source = new Bitmap(new MemoryStream(imageData));
+            using Bitmap generated = new Bitmap((int)Math.Ceiling(0.33 * source.Width),
+                (int)Math.Ceiling(0.33 * source.Height));
+            for (int y = 1, y2 = 0; y < source.Height && y2 < generated.Height; y += 3, y2++)
             {
-                for(int y = 1,y2 = 0; y < source.Height && y2 < generated.Height; y+=3, y2++)
+                for (int x = 1, x2 = 0; x < source.Width && x2 < generated.Width; x += 3, x2++)
                 {
-                    for(int x = 1,x2=0; x < source.Width && x2 < generated.Width; x +=3,x2++)
-                    {
-                        generated.SetPixel(x2, y2, source.GetPixel(x, y));
-                    }
+                    generated.SetPixel(x2, y2, source.GetPixel(x, y));
                 }
-                generated.Save(generatedImagePath, ImageFormat.Jpeg);
             }
-            IStatus<string> result = Util.Container.CreateInstance<IStatus<string>>();
-            result.IsSuccess = true;
-            result.StatusInfo = generatedImagePath;
-            return result;
+            MemoryStream output = new MemoryStream();
+            generated.Save(output, ImageFormat.Jpeg);
+            return output.ToArray();
+
         }
 
         /// <summary>
-        /// Sharpens an image by a scale of 3x, using linear interpolation
+        /// Sharpens an image with a naive rudimentary algorithm
         /// </summary>
-        /// <param name="imageFilePath">Image file path</param>
-        /// <param name="generatedImagePath">Sharpened image file path</param>
-        /// <returns>A status indicating the file path of generated image</returns>
-        public IStatus<string> QuickSharpen(string imageFilePath, string generatedImagePath)
+        /// <param name="imageData">Image binary data</param>
+        /// <returns>Sharpened image binary data</returns>
+        public byte[] QuickSharpen(byte[] imageData)
         {
-            using (Bitmap source = new Bitmap(imageFilePath))
+            using (Bitmap source = new Bitmap(new MemoryStream(imageData)))
             using (Bitmap generated = new Bitmap(3 * source.Width,
                 3 * source.Height))
             {
-                for(int y = 0; y < source.Height; y++)
+                for (int y = 0; y < source.Height; y++)
                 {
-                    for(int x = 0; x < source.Width; x++)
+                    for (int x = 0; x < source.Width; x++)
                     {
                         Color center = source.GetPixel(x, y);
 
@@ -250,7 +221,7 @@ namespace Framework.Common.Impl.Services
                         int yLeftCenter = y;
                         Color leftCenter = (xLeftCenter < 0) ? Color.Black : source.GetPixel(xLeftCenter, yLeftCenter);
                         generated.SetPixel(x * 3, y * 3 + 1, BlendPixels(leftCenter, 0.25F, center));
-                        
+
                         int xRightCenter = x + 1;
                         int yRightCenter = y;
                         Color rightCenter = (xRightCenter >= source.Width) ? Color.Black : source.GetPixel(xRightCenter, yRightCenter);
@@ -274,12 +245,11 @@ namespace Framework.Common.Impl.Services
                         generated.SetPixel(x * 3 + 1, y * 3 + 1, center);
                     }
                 }
-                generated.Save(generatedImagePath, ImageFormat.Jpeg);
+                MemoryStream output = new MemoryStream();
+                generated.Save(output, ImageFormat.Jpeg);
+                return output.ToArray();
             }
-            IStatus<string> result = Util.Container.CreateInstance<IStatus<string>>();
-            result.IsSuccess = true;
-            result.StatusInfo = generatedImagePath;
-            return result;
+           
         }
     }
 }

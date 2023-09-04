@@ -1,5 +1,5 @@
 ﻿using Framework.Interfaces;
-
+using System.Collections.Generic;
 
 namespace Framework.Common.Services
 {
@@ -12,63 +12,55 @@ namespace Framework.Common.Services
         /// <summary>
         /// Genrates all three sizes of an image (small, big, medium) while maintaining
         /// aspect ratio.
-        /// Images are generated in the same folder with source along with their size suffixed to
-        /// their names
         /// </summary>
-        /// <param name="imageFilePath">Path to image file on disk</param>
-        /// <returns>A status indicating the number of sizes that were successfully generated</returns>
-        IStatus<int> GenerateAllSizes(string imageFilePath);
+        /// <param name="imageData">Image binary data</param>
+        /// <returns>A map of size and corresponding binary image data. Map keys are:
+        /// icon,small,medium,big</returns>
+        IDictionary<string,byte[]> GenerateAllSizes(byte[] imageData);
 
         /// <summary>
         /// Generates an icon size image 
-        /// Images are generated in the same folder with source along with their size suffixed to
-        /// their names
         /// </summary>
-        /// <param name="imageFilePath">Original image file path</param>
-        /// <returns>A status indicatng the success of the operation</returns>
-        IStatus<string> GenerateIcon(string imageFilePath);
+        /// <param name="imageData">Image binary data</param>
+        /// <returns>Icon image binary data</returns>
+        byte[] GenerateIcon(byte[] imageData);
 
         /// <summary>
         /// Generates a large image from the given image file. 
         /// Images are generated in the same folder with source along with their size suffixed to
         /// their names
         /// </summary>
-        /// <param name="imageFilePath">Image file path</param>
-        /// <returns>A status indicating the file path of generated image</returns>
-        IStatus<string> GenerateBig(string imageFilePath);
+        /// <param name="imageData">Image binary data</param>
+        /// <returns>Large image binary data</returns>
+        byte[] GenerateBig(byte[] imageData);
 
         /// <summary>
         /// Generates a medium sized image from the given image file. 
         /// Images are generated in the same folder with source along with their size suffixed to
         /// their names
         /// </summary>
-        /// <param name="imageFilePath">Image file path</param>
-        /// <returns>A status indicating the file path of generated image</returns>
-        IStatus<string> GenerateMedium(string imageFilePath);
+        /// <param name="imageData">Image binary data</param>
+        /// <returns>Medium image binary data</returns>
+        byte[] GenerateMedium(byte[] imageData);
 
         /// <summary>
         /// Generates a small image from the given image file. 
-        /// Images are generated in the same folder with source along with their size suffixed to
-        /// their names
-        /// </summary>
-        /// <param name="imageFilePath">Image file path</param>
-        /// <returns>A status indicating the file path of generated image</returns>
-        IStatus<string> GenerateSmall(string imageFilePath);
+        /// <param name="imageData">Image binary data</param>
+        /// <returns>Small image binary data</returns>
+        byte[] GenerateSmall(byte[] imageData);
 
         /// <summary>
         /// Sharpens an image with a naive rudimentary algorithm
         /// </summary>
-        /// <param name="imageFilePath">Image file path</param>
-        /// <param name="generatedImagePath">Sharpened image file path</param>
-        /// <returns>A status indicating the file path of generated image</returns>
-        IStatus<string> QuickSharpen(string imageFilePath,string generatedImagePath);
+        /// <param name="imageData">Image binary data</param>
+        /// <returns>Sharpened image binary data</returns>
+        byte[] QuickSharpen(byte[] imageData);
 
         /// <summary>
         /// Blurs an image by with a naive rudimentary algorithm
         /// </summary>
-        /// <param name="imageFilePath">Image file path</param>
-        /// <param name="generatedImagePath">Sharpened image file path</param>
-        /// <returns>A status indicating the file path of generated image</returns>
-        IStatus<string> QuickBlur(string imageFilePath, string generatedImagePath);
+        /// <param name="imageData">Image binary data</param>
+        /// <returns>Blurred image bianry data</returns>
+        byte[] QuickBlur(byte[] imageData);
     }
 }
