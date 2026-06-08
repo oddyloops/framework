@@ -249,6 +249,27 @@ namespace DataMapperImpl
         }
 
         /// <summary>
+        /// Checks if a type is an enum or a nullable enum, which requires special handling when assigning 
+        /// values to fields of these types. This is because enums are represented as integers in C#, 
+        /// and nullable enums can be null or an integer value corresponding to an enum member.
+        /// </summary>
+        /// <param name="type">
+        /// 
+        /// </param>
+        /// <returns></returns>
+        private static bool IsEnumOrNullableEnum(Type type)
+        {
+            if (type == null) return false;
+
+            // If it's nullable, this returns the inner type (e.g., 'Role').
+            // If it's NOT nullable, this returns null.
+            Type underlyingType = Nullable.GetUnderlyingType(type);
+
+            // Use the underlying type if it exists; otherwise, use the original type.
+            return (underlyingType ?? type).IsEnum;
+        }
+
+        /// <summary>
         /// Assigns a value to object's field mapped to specified field name
         /// </summary>
         /// <param name="fieldName">Field name mapped to field of interest</param>
@@ -261,9 +282,24 @@ namespace DataMapperImpl
             {
                 if (value != null)
                 {
-                    if (value.GetType() == typeof(decimal))
+                    Type type = value.GetType();
+                    if (type == typeof(decimal))
                     {
                         field.SetValue(obj, Convert.ToDouble(value));
+                    }
+                    else if(IsEnumOrNullableEnum(field.PropertyType))
+                    {
+                        try
+                        {
+                            object enumValue = Enum.ToObject(Nullable.GetUnderlyingType(field.PropertyType)
+                                ?? field.PropertyType, value);
+                            field.SetValue(obj, enumValue);
+                        }
+                        catch(Exception ex)
+                        {
+                            throw new Exception($"Type: {Nullable.GetUnderlyingType(field.PropertyType)
+                                ?? field.PropertyType}",ex);
+                        }
                     }
                     else
                     {

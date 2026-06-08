@@ -1,11 +1,11 @@
 ﻿using Framework.Common.Services;
 using Framework.Interfaces;
 using Framework.Utils;
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.PixelFormats;
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Drawing;
-using System.Drawing.Imaging;
 using System.IO;
 using System.Text;
 
@@ -23,13 +23,13 @@ namespace Framework.Common.Impl.Services
         /// <summary>
         /// Fraction2 is (1 - percent1)
         /// </summary>
-        private static Color BlendPixels(Color pixel1, float fraction1, Color pixel2)
+        private static Rgb24 BlendPixels(Rgb24 pixel1, float fraction1, Rgb24 pixel2)
         {
             float fraction2 = 1 - fraction1;
             byte r = (byte)(pixel1.R * fraction1 + pixel2.R * fraction2);
             byte g = (byte)(pixel1.G * fraction1 + pixel2.G * fraction2);
             byte b = (byte)(pixel2.B * fraction1 + pixel2.B * fraction2);
-            Color result = Color.FromArgb(255, r, g, b);
+            Rgb24 result = new Rgb24(r, g, b);
             return result;
         }
 
@@ -61,7 +61,7 @@ namespace Framework.Common.Impl.Services
         {
            
             int height = 0;
-            using (var image = Image.FromStream(new MemoryStream(imageData)))
+            using (var image = Image.Load(new MemoryStream(imageData)))
             {
                 height = image.Height;
             }
@@ -87,7 +87,7 @@ namespace Framework.Common.Impl.Services
         public byte[] GenerateIcon(byte[] imageData)
         { 
             int height = 0;
-            using (var image = Image.FromStream(new MemoryStream(imageData)))
+            using (var image = Image.Load(new MemoryStream(imageData)))
             {
                 height = image.Height;
             }
@@ -114,7 +114,7 @@ namespace Framework.Common.Impl.Services
         {
         
             int height = 0;
-            using (var image = Image.FromStream(new MemoryStream(imageData)))
+            using (var image = Image.Load(new MemoryStream(imageData)))
             {
                 height = image.Height;
             }
@@ -141,7 +141,7 @@ namespace Framework.Common.Impl.Services
         public byte[] GenerateSmall(byte[] imageData)
         {
             int height = 0;
-            using (var image = Image.FromStream(new MemoryStream(imageData)))
+            using (var image = Image.Load(new MemoryStream(imageData)))
             {
                 height = image.Height;
             }
@@ -168,18 +168,18 @@ namespace Framework.Common.Impl.Services
         /// <returns>Blurred image bianry data</returns>
         public byte[] QuickBlur(byte[] imageData)
         {
-            using Bitmap source = new Bitmap(new MemoryStream(imageData));
-            using Bitmap generated = new Bitmap((int)Math.Ceiling(0.33 * source.Width),
+            using Image<Rgb24> source = Image.Load<Rgb24>(new MemoryStream(imageData));
+            using Image<Rgb24> generated = new Image<Rgb24>((int)Math.Ceiling(0.33 * source.Width),
                 (int)Math.Ceiling(0.33 * source.Height));
             for (int y = 1, y2 = 0; y < source.Height && y2 < generated.Height; y += 3, y2++)
             {
                 for (int x = 1, x2 = 0; x < source.Width && x2 < generated.Width; x += 3, x2++)
                 {
-                    generated.SetPixel(x2, y2, source.GetPixel(x, y));
+                    generated[x2, y2] = source[x, y];
                 }
             }
             MemoryStream output = new MemoryStream();
-            generated.Save(output, ImageFormat.Jpeg);
+            generated.SaveAsJpeg(output);
             return output.ToArray();
 
         }
@@ -191,62 +191,62 @@ namespace Framework.Common.Impl.Services
         /// <returns>Sharpened image binary data</returns>
         public byte[] QuickSharpen(byte[] imageData)
         {
-            using (Bitmap source = new Bitmap(new MemoryStream(imageData)))
-            using (Bitmap generated = new Bitmap(3 * source.Width,
+            using (Image<Rgb24> source = Image.Load<Rgb24>(new MemoryStream(imageData)))
+            using (Image<Rgb24> generated = new Image<Rgb24>(3 * source.Width,
                 3 * source.Height))
             {
                 for (int y = 0; y < source.Height; y++)
                 {
                     for (int x = 0; x < source.Width; x++)
                     {
-                        Color center = source.GetPixel(x, y);
+                        Rgb24 center = source[x, y];
 
                         int xTopLeft = x - 1;
                         int yTopLeft = y - 1;
-                        Color topLeft = (xTopLeft < 0 || yTopLeft < 0) ? Color.Black : source.GetPixel(xTopLeft, yTopLeft);
-                        generated.SetPixel(x * 3, y * 3, BlendPixels(topLeft, 0.25F, center));
+                        Rgb24 topLeft = (xTopLeft < 0 || yTopLeft < 0) ? Color.Black : source[xTopLeft, yTopLeft];
+                        generated[x * 3, y * 3] = BlendPixels(topLeft, 0.25F, center);
 
                         int xTopCenter = x;
                         int yTopCenter = y - 1;
-                        Color topCenter = (yTopCenter < 0) ? Color.Black : source.GetPixel(xTopCenter, yTopCenter);
-                        generated.SetPixel(x * 3 + 1, y * 3, BlendPixels(topCenter, 0.25F, center));
+                        Rgb24 topCenter = (yTopCenter < 0) ? Color.Black : source[xTopCenter, yTopCenter];
+                        generated[x * 3 + 1, y * 3] = BlendPixels(topCenter, 0.25F, center);
 
                         int xTopRight = x + 1;
                         int yTopRight = y - 1;
-                        Color topRight = (xTopRight >= source.Width || yTopRight < 0) ? Color.Black : source.GetPixel(xTopRight, yTopRight);
-                        generated.SetPixel(x * 3 + 2, y * 3, BlendPixels(topRight, 0.25F, center));
+                        Rgb24 topRight = (xTopRight >= source.Width || yTopRight < 0) ? Color.Black : source[xTopRight, yTopRight];
+                        generated[x * 3 + 2, y * 3] = BlendPixels(topRight, 0.25F, center);
 
 
                         int xLeftCenter = x - 1;
                         int yLeftCenter = y;
-                        Color leftCenter = (xLeftCenter < 0) ? Color.Black : source.GetPixel(xLeftCenter, yLeftCenter);
-                        generated.SetPixel(x * 3, y * 3 + 1, BlendPixels(leftCenter, 0.25F, center));
+                        Rgb24 leftCenter = (xLeftCenter < 0) ? Color.Black : source[xLeftCenter, yLeftCenter];
+                        generated[x * 3, y * 3 + 1] = BlendPixels(leftCenter, 0.25F, center);
 
                         int xRightCenter = x + 1;
                         int yRightCenter = y;
-                        Color rightCenter = (xRightCenter >= source.Width) ? Color.Black : source.GetPixel(xRightCenter, yRightCenter);
-                        generated.SetPixel(x * 3 + 2, y * 3 + 1, BlendPixels(rightCenter, 0.25F, center));
+                        Rgb24 rightCenter = (xRightCenter >= source.Width) ? Color.Black : source[xRightCenter, yRightCenter];
+                        generated[x * 3 + 2, y * 3 + 1] = BlendPixels(rightCenter, 0.25F, center);
 
                         int xLeftBottom = x - 1;
                         int yLeftBottom = y + 1;
-                        Color leftBottom = (xLeftBottom < 0 || yLeftBottom >= source.Height) ? Color.Black : source.GetPixel(xLeftBottom, yLeftBottom);
-                        generated.SetPixel(x * 3, y * 3 + 2, BlendPixels(leftBottom, 0.25F, center));
+                        Rgb24 leftBottom = (xLeftBottom < 0 || yLeftBottom >= source.Height) ? Color.Black : source[xLeftBottom, yLeftBottom];
+                        generated[x * 3, y * 3 + 2] = BlendPixels(leftBottom, 0.25F, center);
 
                         int xBottomCenter = x;
                         int yBottomCenter = y + 1;
-                        Color bottomCenter = (yBottomCenter >= source.Height) ? Color.Black : source.GetPixel(xBottomCenter, yBottomCenter);
-                        generated.SetPixel(x * 3 + 1, y * 3 + 2, BlendPixels(bottomCenter, 0.25F, center));
+                        Rgb24 bottomCenter = (yBottomCenter >= source.Height) ? Color.Black : source[xBottomCenter, yBottomCenter];
+                        generated[x * 3 + 1, y * 3 + 2] = BlendPixels(bottomCenter, 0.25F, center);
 
                         int xBottomRight = x + 1;
                         int yBottomRight = y + 1;
-                        Color bottomRight = (yBottomRight >= source.Height || xBottomRight >= source.Width) ? Color.Black : source.GetPixel(xBottomRight, yBottomRight);
-                        generated.SetPixel(x * 3 + 2, y * 3 + 2, BlendPixels(bottomRight, 0.25F, center));
+                        Rgb24 bottomRight = (yBottomRight >= source.Height || xBottomRight >= source.Width) ? Color.Black : source[xBottomRight, yBottomRight];
+                        generated[x * 3 + 2, y * 3 + 2] = BlendPixels(bottomRight, 0.25F, center);
 
-                        generated.SetPixel(x * 3 + 1, y * 3 + 1, center);
+                        generated[x * 3 + 1, y * 3 + 1] = center;
                     }
                 }
                 MemoryStream output = new MemoryStream();
-                generated.Save(output, ImageFormat.Jpeg);
+                generated.SaveAsJpeg(output);
                 return output.ToArray();
             }
            

@@ -1,8 +1,8 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net6.0</TargetFramework>
-    <Version>2.0.2</Version>
+    <TargetFramework>net8.0</TargetFramework>
+    <Version>2.2.2</Version>
     <Description>Implementation of commonly used framework interfaces</Description>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <Authors>Adedayo Odesile</Authors>
@@ -10,10 +10,11 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Newtonsoft.Json" Version="13.0.1" />
-    <PackageReference Include="Sendgrid" Version="9.23.1" />
-    <PackageReference Include="SSH.NET" Version="2020.0.2" />
-    <PackageReference Include="System.Drawing.Common" Version="5.0.2" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <PackageReference Include="Sendgrid" Version="9.29.3" />
+    <PackageReference Include="SixLabors.ImageSharp" Version="3.1.11" />
+    <PackageReference Include="SixLabors.ImageSharp.Drawing" Version="2.1.7" />
+    <PackageReference Include="SSH.NET" Version="2025.0.0" />
   </ItemGroup>
 
   <ItemGroup>

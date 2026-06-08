@@ -1,16 +1,16 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net6.0</TargetFramework>
-    <Version>2.1.0</Version>
+    <TargetFramework>net8.0</TargetFramework>
+    <Version>2.2.0</Version>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <Description>Mongo Db ORM</Description>
     <Authors>Adedayo Odesile</Authors>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="MongoDB.Bson" Version="2.11.4" />
-    <PackageReference Include="MongoDB.Driver" Version="2.11.4" />
+    <PackageReference Include="MongoDB.Bson" Version="3.4.3" />
+    <PackageReference Include="MongoDB.Driver" Version="3.4.3" />
   </ItemGroup>
 
   <ItemGroup>

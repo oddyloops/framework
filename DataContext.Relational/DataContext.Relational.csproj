@@ -1,16 +1,16 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net6.0</TargetFramework>
-    <Version>2.1.0</Version>
+    <TargetFramework>net8.0</TargetFramework>
+    <Version>2.2.0</Version>
     <Description>Relational Database Library</Description>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <Authors>Adedayo Odesile</Authors>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="MySql.Data" Version="8.0.20" />
-    <PackageReference Include="System.Data.SqlClient" Version="4.8.1" />
+    <PackageReference Include="MySql.Data" Version="9.4.0" />
+    <PackageReference Include="System.Data.SqlClient" Version="4.9.0" />
   </ItemGroup>
 
   <ItemGroup>
